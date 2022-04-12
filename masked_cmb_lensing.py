@@ -14,6 +14,9 @@ KAP_FILENAME = "kap.fits"
 KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
 RESOLUTION = np.deg2rad(1.0 / 60.)
+OMEGAM_H2 = 0.1428 # planck 2018 vi paper
+RHO = 2.775e11 * OMEGAM_H2
+MASS_CUTOFF = 1.0 # 1e14 solar masses
 
 # defaults to 0.5 arcmin resolution for output geometry
 def alm_to_car(filename, res=RESOLUTION):
@@ -64,7 +67,7 @@ def plot_map(imap, plotname="submap", COLOR_EXTREME = 1.0, width = 1000):
     enplot.write(plotname + "-enplot", enplot_map)
 
 # input a halo catalog .pksc file and output ra, dec in radians
-def catalog_to_coords(filename = "halos_10x10.pksc"):
+def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF):
     f = open(filename)
 
     # number of halos
@@ -77,7 +80,13 @@ def catalog_to_coords(filename = "halos_10x10.pksc"):
     # reshape into 2d array
     data_table = np.reshape(data, (Nhalo, 10))
 
+    # fetch data from columns
     x, y, z = data_table[:, 0], data_table[:, 1], data_table[:, 2]
+    R = data_table[:, 6]
+
+    # for mass cutoff
+    mass = 4*np.pi/3.*RHO*R**3 / 1e14
+
     # convert to ra / dec (radians?) from readhalos.py
     colat, ra = hp.vec2ang(np.column_stack((x, y, z)))
 
@@ -85,7 +94,9 @@ def catalog_to_coords(filename = "halos_10x10.pksc"):
     dec = np.pi/2 - colat
 
     f.close()
-    return ra, dec
+
+    # truncate to mass cutoff
+    return ra[mass >= mass_cutoff], dec[mass >= mass_cutoff]
 
 # stack and average on a random subset of coordinates
 # output stack, average maps
