@@ -10,13 +10,33 @@ import matplotlib.pyplot as plt
 import healpy as hp
 from healpy.fitsfunc import read_alm,read_map
 
+import requests, os
+
+WEBSKY_SITE = "https://mocks.cita.utoronto.ca/data/websky/v0.0/"
 KAP_FILENAME = "kap.fits"
 KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
-RESOLUTION = np.deg2rad(1.0 / 60.)
+
+RESOLUTION = np.deg2rad(0.5 / 60.)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
 MASS_CUTOFF = 1.0 # 1e14 solar masses
+
+# fetch websky data
+def fetch_data(data = ["kap", "ksz", "alm"]):
+    def download(fname):
+        if not os.path.isfile(fname):
+            r = requests.get(WEBSKY_SITE + fname, allow_redirects=True)
+            open(fname, 'wb').write(r.content)
+
+    for d in data:
+        if d == "kap":
+            download(KAP_FILENAME)
+        elif d == "ksz":
+            download(KSZ_FILENAME)
+        elif d == "alm":
+            download(ALM_FILENAME)
+        else: continue
 
 # defaults to 0.5 arcmin resolution for output geometry
 def alm_to_car(filename, res=RESOLUTION):
@@ -185,13 +205,15 @@ def plot_all(stack_ksz, avg_ksz, stack_kap, avg_kap, filename="all-random"):
     
 # runs everything and spits out 
 def run_routine(output_filename = "all-random"):
+    fetch_data()
+
     kap_px = px_to_car(KAP_FILENAME, res=RESOLUTION)
     ksz_px = px_to_car(KSZ_FILENAME, res=RESOLUTION)
     alm_px = alm_to_car(ALM_FILENAME, res=RESOLUTION)
 
-    plot_map(kap_px, plotname="submap-kap")
-    plot_map(ksz_px, plotname="submap-ksz")
-    plot_map(alm_px, plotname="submap-alm")
+    # plot_map(kap_px, plotname="submap-kap")
+    # plot_map(ksz_px, plotname="submap-ksz")
+    # plot_map(alm_px, plotname="submap-alm")
 
     ra, dec = catalog_to_coords()
 
