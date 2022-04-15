@@ -16,8 +16,10 @@ WEBSKY_SITE = "https://mocks.cita.utoronto.ca/data/websky/v0.0/"
 KAP_FILENAME = "kap.fits"
 KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
+NCOORDS = 1000
 
 RESOLUTION = np.deg2rad(0.5 / 60.)
+RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
 MASS_CUTOFF = 1.0 # 1e14 solar masses
@@ -120,13 +122,13 @@ def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF):
 
 # stack and average on a random subset of coordinates
 # output stack, average maps
-def stack_average_random(imap, ra, dec, Ncoords=1000,
-                         radius=np.deg2rad(2.), res=RESOLUTION):
+def stack_average_random(imap, ra, dec, Ncoords=NCOORDS,
+                         radius=RAD, res=RESOLUTION):
     idx_random = np.random.choice(len(ra), Ncoords, replace=False)
     coords = np.array([[dec[i], ra[i]] for i in idx_random])
 
     # create thumbnails
-    thumbs = thumbnails(imap, coords, r = np.deg2rad(2.), res=res)
+    thumbs = thumbnails(imap, coords, r = radius, res=res)
 
     # stack
     stack_map = 0
@@ -140,12 +142,12 @@ def stack_average_random(imap, ra, dec, Ncoords=1000,
 
 # stack and average on the first N coordinates
 # output stack, average maps
-def stack_average_firstn(imap, ra, dec, Ncoords=1000,
-                         radius=np.deg2rad(2.), res=RESOLUTION):
+def stack_average_firstn(imap, ra, dec, Ncoords=NCOORDS,
+                         radius=RAD, res=RESOLUTION):
     coords = np.array([[dec[i], ra[i]] for i in range(Ncoords)])
 
     # create thumbnails
-    thumbs = thumbnails(imap, coords, r = np.deg2rad(2.), res=res)
+    thumbs = thumbnails(imap, coords, r = radius, res=res)
 
     # stack
     stack_map = 0
@@ -159,14 +161,14 @@ def stack_average_firstn(imap, ra, dec, Ncoords=1000,
 
 # stack and average 2 maps on the same random subset of coordinates
 # output stack, average maps
-def stack_average_2map_random(imap1, imap2, ra, dec, Ncoords=1000,
-                              radius=np.deg2rad(2.), res=RESOLUTION):
+def stack_average_2map_random(imap1, imap2, ra, dec, Ncoords=NCOORDS,
+                              radius=RAD, res=RESOLUTION):
     idx_random = np.random.choice(len(ra), Ncoords, replace=False)
     coords = np.array([[dec[i], ra[i]] for i in idx_random])
 
     # create thumbnails
-    thumbs1 = thumbnails(imap1, coords, r = np.deg2rad(2.), res=res)
-    thumbs2 = thumbnails(imap2, coords, r = np.deg2rad(2.), res=res)
+    thumbs1 = thumbnails(imap1, coords, r = radius, res=res)
+    thumbs2 = thumbnails(imap2, coords, r = radius, res=res)
 
     # stack
     stack1_map = 0
