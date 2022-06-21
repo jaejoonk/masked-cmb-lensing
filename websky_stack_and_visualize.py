@@ -18,11 +18,11 @@ KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
 NCOORDS = 1000
 
-RESOLUTION = np.deg2rad(0.5 / 60.)
+RESOLUTION = np.deg2rad(1.5 / 60.)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MASS_CUTOFF = 1.0 # 1e14 solar masses
+MASS_CUTOFF = 4.0 # 1e14 solar masses
 
 # fetch websky data
 def fetch_data(data = ["kap", "ksz", "alm"]):
