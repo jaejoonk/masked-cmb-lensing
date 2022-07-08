@@ -89,15 +89,16 @@ def plot_map(imap, plotname="submap", COLOR_EXTREME = 1.0, width = 1000):
     enplot.write(plotname + "-enplot", enplot_map)
 
 # input a halo catalog .pksc file and output ra, dec in radians
-def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF):
+def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF,
+                      output_to_file = False, output_file = "output_halos.txt"):
     f = open(filename)
 
-    # number of halos
+    # number of halos from binary file,
     Nhalo = np.fromfile(f, count=3, dtype=np.int32)[0]
 
     # halo data (10 cols):
     # x, y, z [Mpc], vx, vy, vz [km/s], M [M_sun], x_lag, y_lag, z_lag
-    data = np.fromfile(f, dtype=np.float32)
+    data = np.fromfile(f, count=Nhalo * 10, dtype=np.float32)
 
     # reshape into 2d array
     data_table = np.reshape(data, (Nhalo, 10))
@@ -118,7 +119,13 @@ def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF):
     f.close()
 
     # truncate to mass cutoff
-    return ra[mass >= mass_cutoff], dec[mass >= mass_cutoff]
+    ra_cutoff = ra[mass >= mass_cutoff]
+    dec_cutoff = dec[mass >= mass_cutoff]
+    masses = mass[mass >= mass_cutoff] * 1e14
+    if not output_to_file: return ra_cutoff, dec_cutoff
+    else: np.savetxt(output_file,
+                     np.array(list(zip(ra_cutoff, dec_cutoff, masses))),
+                     delimiter=',')
 
 # stack and average on a random subset of coordinates
 # output stack, average maps
