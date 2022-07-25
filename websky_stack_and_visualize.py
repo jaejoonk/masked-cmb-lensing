@@ -22,7 +22,7 @@ RESOLUTION = np.deg2rad(1.5 / 60.)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MASS_CUTOFF = 4.0 # 1e14 solar masses
+MASS_CUTOFF = 1.0 # 1e14 solar masses
 
 # fetch websky data
 def fetch_data(data = ["kap", "ksz", "alm"]):
@@ -90,11 +90,13 @@ def plot_map(imap, plotname="submap", COLOR_EXTREME = 1.0, width = 1000):
 
 # input a halo catalog .pksc file and output ra, dec in radians
 def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF,
-                      output_to_file = False, output_file = "output_halos.txt"):
+                      output_to_file = False, output_file = "output_halos.txt",
+                      Nhalos=None):
     f = open(filename)
 
     # number of halos from binary file,
     Nhalo = np.fromfile(f, count=3, dtype=np.int32)[0]
+    if Nhalos != None: Nhalo = Nhalos
 
     # halo data (10 cols):
     # x, y, z [Mpc], vx, vy, vz [km/s], M [M_sun], x_lag, y_lag, z_lag
@@ -126,6 +128,12 @@ def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF,
     else: np.savetxt(output_file,
                      np.array(list(zip(ra_cutoff, dec_cutoff, masses))),
                      delimiter=',')
+
+# return ra, dec from a file
+def read_coords_from_file(input_filename):
+    data = np.loadtxt(input_filename, delimiter=",")
+    return data[:, 0], data[:, 1]
+
 
 # stack and average on a random subset of coordinates
 # output stack, average maps
