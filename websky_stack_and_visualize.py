@@ -130,8 +130,12 @@ def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF,
                      delimiter=',')
 
 # return ra, dec from a file
-def read_coords_from_file(input_filename):
+def read_coords_from_file(input_filename, lowlim=None, highlim=None):
     data = np.loadtxt(input_filename, delimiter=",")
+    if lowlim is not None:
+        data = data[data[:,2] >= lowlim]
+    if highlim is not None:
+        data = data[data[:,2] <= highlim]
     return data[:, 0], data[:, 1]
 
 

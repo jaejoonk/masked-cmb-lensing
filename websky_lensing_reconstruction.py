@@ -22,7 +22,7 @@ from symlens import utils as sutils
 from falafel import qe, utils
 import pytempura 
 
-from orphics import cosmology, io, stats, pixcov
+from orphics import maps, cosmology, io, stats, pixcov
 
 # my own file
 import websky_stack_and_visualize as josh_websky
@@ -36,6 +36,7 @@ KAP_FILENAME = "kap.fits"
 KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
 HALOS_FILENAME = "halos_10x10.pksc"
+COORDS_FILENAME = "1e7_massive_halos.txt"
 NCOORDS = 1000
 
 RESOLUTION = np.deg2rad(1.5 / 60.)
@@ -47,6 +48,7 @@ MASS_CUTOFF = 4.0 # 1e14 solar masses
 
 LMIN = 300
 LMAX = 6000
+MLMAX = 8000
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']
@@ -73,6 +75,13 @@ def almfile_to_map(alm_filename = ALM_FILENAME, res = RESOLUTION):
     alm_px = alm2map(alm_hp, omap)
     return alm_px
 
+# filter convergence file to an lmax and return map
+def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
+    shape, wcs = enmap.fullsky_geometry(res=res)
+    kap_px = josh_websky.px_to_car("../" + kap_filename, res=res)
+    
+    return alm2map(map2alm(kap_px, lmax=lmax), enmap.empty(shape, wcs, dtype=np.float32))
+
 # inverse filter the alms onto [lmin, lmax] and introduce 1/f noise
 def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
                        beam_fwhm = BEAM_FWHM, noise_t = NOISE_T):
@@ -85,13 +94,17 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 
 # run the quadratic estimator from falafel
 # first index regular alms, second index gradient alms
-def falafel_qe(ucls, fTalm, lmax=LMAX, ests=ESTS):
+def falafel_qe(ucls, fTalm, xfTalm = None, mlmax=MLMAX, ests=ESTS):
     shape, wcs = enmap.fullsky_geometry(res=res)
     px = qe.pixelization(shape=shape, wcs=wcs)
 
-    recon_alms = qe.qe_all(px, ucls, fTalm=fTalm, fEalm=fTalm*0.,
-                           fBalm=fTalm*0., mlmax=lmax, estimators=ests)
-    return recon_alms[ests[0]]
+    recon_alms = qe.qe_all(px, ucls, fTalm=fTalm, fEalm=fTalm*0., fBalm=fTalm*0.,
+                           xfTalm = xfTalm,
+                           xfEalm = (None if xfTalm is None else xfTalm*0.),
+                           xfBalm = (None if xfTalm is None else xfTalm*0.),
+                           mlmax=mlmax, estimators=ests)
+
+    return recon_alms
 
 # get normalizations from tempura
 # first index regular alms, second index gradient alms
@@ -100,10 +113,9 @@ def tempura_norm(ests, ucls, tcls,
     return pytempura.get_norms(ests, ucls, tcls,
                                lmin, lmax, k_ellmax, no_corr=False)[ests[0]]
 
-# get normalizations from symlens
+# get normalizations from symlens, standard way
 def symlens_norm(sym_lmin=SYM_LMIN, sym_lmax=SYM_LMAX,
                  sym_glmin=SYM_LMIN, sym_glmax=SYM_LMAX):
-
 
     sym_shape, sym_wcs = enmap.geometry(res=RESOLUTION, pos=[0,0],
                                         shape=(1000,1000), proj='plain') 
@@ -153,8 +165,16 @@ def read_kappa_map(kap_filename=KAP_FILENAME, res=RESOLUTION):
     shape, wcs = enmap.fullsky_geometry(res=res)
     kap_px = josh_websky.px_to_car("../" + kap_filename, res=res)
 
-    return alm2map(map2alm(kap_px, lmax=lmax),
+    return alm2map(map2alm(kap_px, lmax=LMAX),
                    enmap.empty(shape, wcs, dtype=np.float32))
+
+# generating maps by performing A_l * phi and converting to kappa
+# alms are the output values from falafel QE
+def mapper(norms, alms, shape, wcs, lmin=LMIN, lmax=LMAX):
+    phi_product = almxfl(alms['TT'][0].astype(np.complex128),
+                         np.array([0. if (i < LMIN or i > LMAX)
+                                   else norms[i] for i in range(len(norms))]))
+    return alm2map(phi_to_kappa(phi_product), enmap.empty(shape, wcs, dtype=np.float32))
 
 # stack recon maps 
 def stack_recon_maps(kappa_map, kapfile_map, 
@@ -238,13 +258,18 @@ def radial_lsum_own(imap, shape, wcs, bins, weights=None):
 
 # binning and adding then dividing, probably buggy
 def radial_avg_own(imap, res, bins, weights=None):
+    dmap = distance_map(imap, res)
+    if weights is not None: imap = imap * weights
+    result = []
     
-    numerator = radial_sum_own(imap, res, bins, weights)
-    map_ones = 1. + enmap.empty(imap.shape, imap.wcs, dtype=np.float32)
-    denominator = radial_sum_own(map_ones, res, bins, None)
-    assert len(numerator) == len(denominator), "unequal sizes of numerator + denominator for averaging"
-    
-    return [numerator[i] / denominator[i] for i in range(len(numerator))]
+    for in_bin, out_bin in zip(bins, bins[1:]):
+        # indices
+        (xcoords, ycoords) = np.where(np.logical_and(dmap >= in_bin, dmap < out_bin))
+        coords = [(xcoords[i], ycoords[i]) for i in range(len(xcoords))]
+        # sum of values within the annulus of distance
+        result.append(sum([imap[x,y] for (x,y) in coords]) / len(coords))
+        
+    return result
 
 # binning and adding
 def radial_sum_own(imap, res, bins, weights=None):
@@ -260,4 +285,126 @@ def radial_sum_own(imap, res, bins, weights=None):
         result.append(sum([imap[x,y] for (x,y) in coords]) / len(coords))
         
     return result
+
+###############################################
+# own symlens wrappers
+###############################################
+def get_s_norms(ests, ucls, tcls, lmin, lmax, shape, wcs,
+                GLMIN = None, GLMAX = None, noise_t = NOISE_T,
+                beam_fwhm = BEAM_FWHM, grad_cut=False):
+    feed_dict = {}
+    modlmap = enmap.modlmap(shape, wcs)
+    kmask = sutils.mask_kspace(shape, wcs, lmin=lmin, lmax=lmax)
+    g_kmask = sutils.mask_kspace(shape, wcs,
+                                 lmin=(LMIN if GLMIN == None else GLMIN),
+                                 lmax=(LMAX if GLMAX == None else GLMAX))
+    
+    results = {}
+    for est in ests:
+        ells = np.arange(len(ucls[est]))
+        feed_dict['uC_T_T'] = sutils.interp(ells, ucls[est])(modlmap)
+        feed_dict['tC_T_T'] = sutils.interp(ells, tcls[est])(modlmap)
+        
+        norms = s.A_l(shape, wcs, feed_dict, "hdv", est, xmask=g_kmask, ymask=kmask)
+        results[est] = norms
+    
+    return results
+
+def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
+    # binning 
+    modlmap = enmap.modlmap(shape, wcs)
+    Lrange = np.arange(lmin, lmax, lwidth)
+    binner = stats.bin2D(modlmap, Lrange)
+
+    l_factor = modlmap * (modlmap + 1) / 4.
+    centers, binned_norms = binner.bin(s_norms * l_factor)
+    
+    # generate norms object by interpolating
+    Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
+    return Al
+
+###############################################
+# Mean field calculations
+###############################################
+
+## Incorrectly generate a uniform distribution of ra,dec around spherical projection
+def wrong_ra_dec(N):
+    return np.random.uniform(0, 2*np.pi, N), np.random.uniform(-np.pi/2, np.pi/2, N)
+
+## Generate a uniform distribution of ra,dec around a spherical projection
+def random_ra_dec(N, zero=1e-4):
+    xyz = []
+    while len(xyz) < N:
+        [x,y,z] = np.random.normal(size=3)
+        # for rounding errors
+        if (x**2 + y**2 + z**2)**0.5 > zero: xyz.append([x,y,z])
+    colat, ra = hp.vec2ang(np.array(xyz))
+    return ra, np.pi/2 - colat
+
+###############################################
+# Stacker and plotter functions
+###############################################
+
+# Stacks the input maps for Ncoords # of random coordinates, and then  plots the 
+# (by default) averaged stack. Returns the output stacked (or averaged) maps, 
+# satisfying the same order as the input.
+def stack_and_plot_maps(maps, labels=None, Ncoords=NCOORDS, output_filename="plot.png",
+                        coords_filename=COORDS_FILENAME, radius=10*RESOLUTION, 
+                        res=RESOLUTION, figscale=16, fontsize=13,
+                        stacked_maps=False):
+    struct = []
+    ras, decs = josh_websky.read_coords_from_file(coords_filename)
+    # check if random # of coordinates asked for exceeds # of data points
+    if len(ras) > Ncoords: Ncoords = len(ras) 
+    for imap in maps:
+        stacked_map, avg_map = josh_websky.stack_average_random(imap, ras, decs,
+                                                                Ncoords=Ncoords,
+                                                                radius=radius,
+                                                                res = res)
+        struct.append((stacked_map, avg_map))
+    
+    figscale_y = figscale * 3 // 4 * len(struct)
+    fig, axes = plt.subplots(nrows=1, ncols=len(struct), figsize=(figscale, figscale_y))
+
+    ims = []
+    for i in range(len(struct)):
+        im = axes[i].imshow(struct[i][0 if stacked_maps else 1], cmap='jet')
+        ims.append(im)
+        if labels is not None and i < len(labels):
+            axes[i].set_title(labels[i], fontsize=fontsize)
+    
+    fig.subplots_adjust(right=0.85)
+    for i in range(len(ims)):
+        fig.colorbar(ims[i], ax = axes[i], fraction=0.046, pad=0.04)
+
+    plt.tight_layout()
+    plt.savefig(output_filename)
+
+    return [elem[0 if stacked_maps else 1] for elem in struct]
+
+# Plots the binned radial profile for a bunch of maps centered at a signal, which
+# for a convergence map should be the kappa convergence value as a function of radians 
+# from the center. Returns kappa(radians) for each map, satisfying the same order as the input.
+def radial_profiles(signal_maps, labels=None, 
+                    output_filename="binned_radial_profiles.png",
+                    radius=10*RESOLUTION, res=RESOLUTION, Nbins = 20):
+
+    radius_bins = np.linspace(0, radius, Nbins)
+    radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
+    binned_profiles = []
+    for imap in signal_maps:
+        binned_profiles.append(radial_avg_own(imap, res, radius_bins))
+    
+    plt.title("Average binned radial profiles (kappa map)")
+    plt.xlabel("Radians")
+    plt.ylabel("Kappa")
+    for i in range(len(binned_profiles)):
+        labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
+        plt.plot(radius_centers, binned_profiles[i], label=labeltext)
+    
+    if labels is not None: plt.legend()
+    plt.savefig(output_filename)
+
+    return binned_profiles
+
 
