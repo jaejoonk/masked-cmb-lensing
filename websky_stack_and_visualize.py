@@ -133,11 +133,10 @@ def catalog_to_coords(filename = "halos_10x10.pksc", mass_cutoff = MASS_CUTOFF,
 def read_coords_from_file(input_filename, lowlim=None, highlim=None):
     data = np.loadtxt(input_filename, delimiter=",")
     if lowlim is not None:
-        data = data[data[:,2] >= lowlim]
+        data = data[data[:,2] >= (lowlim * 1e14)]
     if highlim is not None:
-        data = data[data[:,2] <= highlim]
+        data = data[data[:,2] <= (highlim * 1e14)]
     return data[:, 0], data[:, 1]
-
 
 # stack and average on a random subset of coordinates
 # output stack, average maps

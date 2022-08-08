@@ -47,7 +47,9 @@ RHO = 2.775e11 * OMEGAM_H2
 MASS_CUTOFF = 4.0 # 1e14 solar masses
 
 LMIN = 300
+SYM_LMIN = LMIN
 LMAX = 6000
+SYM_LMAX = LMAX
 MLMAX = 8000
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
@@ -78,7 +80,7 @@ def almfile_to_map(alm_filename = ALM_FILENAME, res = RESOLUTION):
 # filter convergence file to an lmax and return map
 def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
     shape, wcs = enmap.fullsky_geometry(res=res)
-    kap_px = josh_websky.px_to_car("../" + kap_filename, res=res)
+    kap_px = josh_websky.px_to_car(kap_filename, res=res)
     
     return alm2map(map2alm(kap_px, lmax=lmax), enmap.empty(shape, wcs, dtype=np.float32))
 
@@ -94,7 +96,7 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 
 # run the quadratic estimator from falafel
 # first index regular alms, second index gradient alms
-def falafel_qe(ucls, fTalm, xfTalm = None, mlmax=MLMAX, ests=ESTS):
+def falafel_qe(ucls, fTalm, xfTalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION):
     shape, wcs = enmap.fullsky_geometry(res=res)
     px = qe.pixelization(shape=shape, wcs=wcs)
 
@@ -170,7 +172,8 @@ def read_kappa_map(kap_filename=KAP_FILENAME, res=RESOLUTION):
 
 # generating maps by performing A_l * phi and converting to kappa
 # alms are the output values from falafel QE
-def mapper(norms, alms, shape, wcs, lmin=LMIN, lmax=LMAX):
+def mapper(norms, alms, res=RESOLUTION, lmin=LMIN, lmax=LMAX):
+    shape, wcs = enmap.fullsky_geometry(res=res)
     phi_product = almxfl(alms['TT'][0].astype(np.complex128),
                          np.array([0. if (i < LMIN or i > LMAX)
                                    else norms[i] for i in range(len(norms))]))
@@ -178,7 +181,7 @@ def mapper(norms, alms, shape, wcs, lmin=LMIN, lmax=LMAX):
 
 # stack recon maps 
 def stack_recon_maps(kappa_map, kapfile_map, 
-                    halos_filename=HALOS_FILENAME, res=STACK_RES,
+                     halos_filename=HALOS_FILENAME, res=STACK_RES,
                      output_filename="recon.png"):
     ra, dec = josh_websky.catalog_to_coords(filename=halos_filename)
 
@@ -345,17 +348,23 @@ def random_ra_dec(N, zero=1e-4):
 # Stacker and plotter functions
 ###############################################
 
-# Stacks the input maps for Ncoords # of random coordinates, and then  plots the 
+def gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
+               lowlim=None, highlim=MASS_CUTOFF):
+    ras, decs = josh_websky.read_coords_from_file(coords_filename,
+                                                  lowlim=lowlim, highlim=highlim)
+    return ras, decs
+
+
+# Stacks the input maps for Ncoords # of random coordinates, and then plots the 
 # (by default) averaged stack. Returns the output stacked (or averaged) maps, 
 # satisfying the same order as the input.
-def stack_and_plot_maps(maps, labels=None, Ncoords=NCOORDS, output_filename="plot.png",
-                        coords_filename=COORDS_FILENAME, radius=10*RESOLUTION, 
+def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
+                        output_filename="plot.png", radius=10*RESOLUTION,
                         res=RESOLUTION, figscale=16, fontsize=13,
                         stacked_maps=False):
     struct = []
-    ras, decs = josh_websky.read_coords_from_file(coords_filename)
     # check if random # of coordinates asked for exceeds # of data points
-    if len(ras) > Ncoords: Ncoords = len(ras) 
+    if len(ras) < Ncoords: Ncoords = len(ras) 
     for imap in maps:
         stacked_map, avg_map = josh_websky.stack_average_random(imap, ras, decs,
                                                                 Ncoords=Ncoords,

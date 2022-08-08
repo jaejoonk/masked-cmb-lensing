@@ -31,28 +31,30 @@ import websky_lensing_reconstruction as josh_wlrecon
 ###############################################
 # constants
 ###############################################
+DEBUG = True
 
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "kap.fits"
 KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
-HALOS_FILENAME = "halos_10x10.pksc"
+HALOS_FILENAME = "halos.pksc"
 COORDS_FILENAME = "2e6_massive_halos.txt"
-OUTPUT_STACKS_FILENAME = "full-data-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = "full-kappa-binned-rprofiles.png"
-NCOORDS = 50000
+OUTPUT_STACKS_FILENAME = "full-data-qe-stacks-1to4.png"
+OUTPUT_RPROFILE_FILENAME = "full-kappa-binned-rprofiles-1to4.png"
+NCOORDS = 10000
 NBINS = 20
 LWIDTH = 50
 
-RESOLUTION = np.deg2rad(1.0 / 60.)
-STACK_RES = np.deg2rad(1.0 / 60.)
+RESOLUTION = np.deg2rad(1.5 / 60.)
+STACK_RES = np.deg2rad(1.5 / 60.)
 RADIUS = STACK_RES * 10. # 10 arcmin
 SYM_RES = np.deg2rad(1.5 / 60.)
 SYM_SHAPE = (2000,2000)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MASS_CUTOFF = 1.0 # 1e14 solar masses
+MIN_MASS = 1.0 # 1e14 solar masses
+MAX_MASS = 4.0 # 1e14 solar masses
 
 LMIN = 300
 LMAX = 6000
@@ -66,7 +68,7 @@ ESTS = ['TT']
 # Lensing reconstruction
 ###############################################
 
-def full_procedure(debug=False):
+def full_procedure(debug=DEBUG):
     t1 = time.time()
     alm_map = josh_wlrecon.almfile_to_map(alm_filename=ALM_FILENAME,
                                           res=RESOLUTION)
@@ -86,13 +88,13 @@ def full_procedure(debug=False):
     if debug:
         print("Inverse filtered alms. Total time elapsed: %0.5f seconds" % (time.time() - t1))
     
-    recon_alms     = josh_wlrecon.falafel_qe(ucls, fTalm, mlmax=MLMAX, ests=ESTS)
-    cut_recon_alms = josh_wlrecon.falafel_qe(ucls, fTalm, xfTalm=xfTalm, mlmax=MLMAX, ests=ESTS)
+    recon_alms     = josh_wlrecon.falafel_qe(ucls, fTalm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
+    cut_recon_alms = josh_wlrecon.falafel_qe(ucls, fTalm, xfTalm=xfTalm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
 
     if debug:
         print("Performed grad-cut + standard QE reconstruction. Total time elapsed: %0.5f seconds" % (time.time() - t1))
     
-    Al_temp = josh_wlrecon.tempura_norm(ests, ucls, tcls, lmin=LMIN, lmax=LMAX, k_ellmax=LMAX)['TT'][0]
+    Al_temp = josh_wlrecon.tempura_norm(ESTS, ucls, tcls, lmin=LMIN, lmax=LMAX, k_ellmax=LMAX)[0]
 
     if debug:
         print("Computed tempura's lensing normalization for uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
@@ -104,27 +106,30 @@ def full_procedure(debug=False):
 
     kells = np.arange(Al_temp.shape[0])
     Al_sym =      josh_wlrecon.s_norms_formatter(s_norms[ESTS[0]], kells, sym_shape, sym_wcs,
-                                                 LMIN, LMAX, Lwidth=LWIDTH)
+                                                 LMIN, LMAX, LWIDTH)
     Al_cut_sym =  josh_wlrecon.s_norms_formatter(cut_s_norms[ESTS[0]], kells, sym_shape, sym_wcs,
-                                                 LMIN, LMAX, Lwidth=LWIDTH)
+                                                 LMIN, LMAX, LWIDTH)
     
     if debug:
         print("Computed symlens's lensing normalization for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
 
     kells_factor = 1. / (kells * (kells + 1) / 2.)**2
 
-    symlens_map = josh_wlrecon.mapper(Al_sym * kells_factor, recon_alms)
-    tempura_map = josh_wlrecon.mapper(Al_temp * kells_factor, recon_alms)
-    cut_symlens_map = josh_wlrecon.mapper(Al_cut_sym * kells_factor, cut_recon_alms)
+    symlens_map = josh_wlrecon.mapper(Al_sym * kells_factor, recon_alms, res=RESOLUTION)
+    tempura_map = josh_wlrecon.mapper(Al_temp * kells_factor, recon_alms, res=RESOLUTION)
+    cut_symlens_map = josh_wlrecon.mapper(Al_cut_sym * kells_factor, cut_recon_alms, res=RESOLUTION)
 
     if debug:
         print("Created kappa maps for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
 
-    avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map], 
+    ras, decs = josh_wlrecon.gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
+                                        lowlim=MIN_MASS, highlim=MAX_MASS)
+    avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map],
+                                                  ras, decs, 
+                                                  Ncoords = NCOORDS,
                                                   labels=["Stack from falafel QE + symlens",
                                                           "Stack from gradient cut falafel QE + symlens",
                                                           "Stack from kap.fits"],
-                                                  Ncoords = NCOORDS,
                                                   output_filename = OUTPUT_STACKS_FILENAME)
     
     if debug:
@@ -140,5 +145,6 @@ def full_procedure(debug=False):
                                                                                             time.time() - t1))       
     print("** COMPLETE! **")      
                 
-    
-    
+
+if __name__ == '__main__':
+    full_procedure()
