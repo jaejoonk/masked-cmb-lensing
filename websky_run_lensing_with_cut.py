@@ -39,8 +39,8 @@ KSZ_FILENAME = "ksz.fits"
 ALM_FILENAME = "lensed_alm.fits"
 HALOS_FILENAME = "halos.pksc"
 COORDS_FILENAME = "2e6_massive_halos.txt"
-OUTPUT_STACKS_FILENAME = "full-data-qe-stacks-1to4.png"
-OUTPUT_RPROFILE_FILENAME = "full-kappa-binned-rprofiles-1to4.png"
+OUTPUT_STACKS_FILENAME = "full-data-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = "full-kappa-binned-rprofiles.png"
 NCOORDS = 10000
 NBINS = 20
 LWIDTH = 50
@@ -49,12 +49,12 @@ RESOLUTION = np.deg2rad(1.5 / 60.)
 STACK_RES = np.deg2rad(1.5 / 60.)
 RADIUS = STACK_RES * 10. # 10 arcmin
 SYM_RES = np.deg2rad(1.5 / 60.)
-SYM_SHAPE = (2000,2000)
+SYM_SHAPE = (4000,4000)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MIN_MASS = 1.0 # 1e14 solar masses
-MAX_MASS = 4.0 # 1e14 solar masses
+MIN_MASS = 1. # 1e14 solar masses
+MAX_MASS = 40. # 1e14 solar masses
 
 LMIN = 300
 LMAX = 6000
@@ -77,6 +77,8 @@ def full_procedure(debug=DEBUG):
 
     kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME,
                                           res=RESOLUTION)
+    kap_map = kap_map - kap_map.mean()
+    
     if debug:
         print("Opened kap file and created map. Total time elapsed: %0.5f seconds" % (time.time() - t1))
     
@@ -105,19 +107,20 @@ def full_procedure(debug=DEBUG):
                                            GLMIN=LMIN, GLMAX=GLMAX, grad_cut=True)
 
     kells = np.arange(Al_temp.shape[0])
+    
     Al_sym =      josh_wlrecon.s_norms_formatter(s_norms[ESTS[0]], kells, sym_shape, sym_wcs,
-                                                 LMIN, LMAX, LWIDTH)
+                                                 1, LMAX, LWIDTH)
     Al_cut_sym =  josh_wlrecon.s_norms_formatter(cut_s_norms[ESTS[0]], kells, sym_shape, sym_wcs,
-                                                 LMIN, LMAX, LWIDTH)
+                                                 1, LMAX, LWIDTH)
     
     if debug:
         print("Computed symlens's lensing normalization for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
 
-    kells_factor = 1. / (kells * (kells + 1) / 2.)**2
+    kells_factor = 1. / 2.
 
-    symlens_map = josh_wlrecon.mapper(Al_sym * kells_factor, recon_alms, res=RESOLUTION)
-    tempura_map = josh_wlrecon.mapper(Al_temp * kells_factor, recon_alms, res=RESOLUTION)
-    cut_symlens_map = josh_wlrecon.mapper(Al_cut_sym * kells_factor, cut_recon_alms, res=RESOLUTION)
+    symlens_map = josh_wlrecon.mapper(kells_factor * Al_sym, recon_alms, res=RESOLUTION, lmin=0, lmax=LMAX)
+    # tempura_map = josh_wlrecon.mapper(Al_temp * kells_factor, recon_alms, res=RESOLUTION)
+    cut_symlens_map = josh_wlrecon.mapper(kells_factor * Al_cut_sym, cut_recon_alms, res=RESOLUTION, lmin=0, lmax=LMAX)
 
     if debug:
         print("Created kappa maps for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))

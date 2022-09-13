@@ -61,36 +61,54 @@ ESTS = ['TT']
 
 # should be compatible with a standard falafel installation
 def import_theory_root(path = PATH_TO_FALAFEL):
+    # extract theory configuration from config.yml
     config = io.config_from_yaml(PATH_TO_FALAFEL + "/input/config.yml")
+    # location of theory config information
     thloc = PATH_TO_FALAFEL + "/data/" + config['theory_root']
 
+    # load power spectra using CAMB, according to the theory config info
+    # function is from orphics.cosmology
     theory = cosmology.loadTheorySpectraFromCAMB(thloc,get_dimensionless=False)
     return thloc, theory
 
 # open and read alm file, return full sky map with appropriate dimensions
 def almfile_to_map(alm_filename = ALM_FILENAME, res = RESOLUTION):
+    # healpy.fitsfunc.read_alm to create a healpy object for the alm input file
     alm_hp = read_alm(alm_filename)
+    # create a pixell shape + wcs for the full sky geometry with an input resolution
     shape, wcs = enmap.fullsky_geometry(res=res)
     
-    # create empty map to overlay our map
+    # create empty map 
     omap = enmap.empty(shape, wcs, dtype=np.float32)
+    # pixell.curvedsky.alm2map to overlay our alm object into the full sky map
     alm_px = alm2map(alm_hp, omap)
     return alm_px
 
 # filter convergence file to an lmax and return map
 def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
+    # create a pixell shape + wcs for the full sky geometry with an input resolution
     shape, wcs = enmap.fullsky_geometry(res=res)
+    # use my function to convert the input kappa file into a map object with the provided resolution
     kap_px = josh_websky.px_to_car(kap_filename, res=res)
     
-    return alm2map(map2alm(kap_px, lmax=lmax), enmap.empty(shape, wcs, dtype=np.float32))
+    # convert input map into alms to filter to a maximum ell, and then convert back to a map
+    # with the full sky geometry w/ given resolution
+    kap_alms = maps.change_alm_lmax(map2alm(kap_px, lmax=lmax), MLMAX)
+    return alm2map(kap_alms, enmap.empty(shape, wcs, dtype=np.float32))
 
 # inverse filter the alms onto [lmin, lmax] and introduce 1/f noise
 def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
-                       beam_fwhm = BEAM_FWHM, noise_t = NOISE_T):
+                       beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad = True):
+    # extract alms from the map, up to lmax
     alms = map2alm(alm_map, lmax=lmax)
-    ucls, tcls = utils.get_theory_dicts_white_noise(beam_fwhm, noise_t)
+    # falafel.utils to get ucls and tcls
+    # this function calls cosmology.loadTheorySpectraFromCAMB
+    ucls, tcls = utils.get_theory_dicts_white_noise(beam_fwhm, noise_t, grad=grad)
+    # returns [fTalm, fEalm, fBalm]
     fTalm = utils.isotropic_filter([alms, alms*0., alms*0.], tcls,
                                     lmin, lmax, ignore_te=True)[0]
+    # beam?
+    # fTalm = almxfl(fTalm, lambda ells: 1./sutils.gauss_beam(ells, beam_fwhm))
     
     return ucls, tcls, fTalm
 
@@ -98,14 +116,16 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 # first index regular alms, second index gradient alms
 def falafel_qe(ucls, fTalm, xfTalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION):
     shape, wcs = enmap.fullsky_geometry(res=res)
+    # create a pixelization object
     px = qe.pixelization(shape=shape, wcs=wcs)
-
-    recon_alms = qe.qe_all(px, ucls, fTalm=fTalm, fEalm=fTalm*0., fBalm=fTalm*0.,
+    # run the quadratic estimator using the theory ucls
+    recon_alms = qe.qe_all(px, ucls, mlmax=mlmax,
+                           fTalm=fTalm, fEalm=fTalm*0., fBalm=fTalm*0.,
+                           estimators=ests,
                            xfTalm = xfTalm,
                            xfEalm = (None if xfTalm is None else xfTalm*0.),
-                           xfBalm = (None if xfTalm is None else xfTalm*0.),
-                           mlmax=mlmax, estimators=ests)
-
+                           xfBalm = (None if xfTalm is None else xfTalm*0.)
+                          )
     return recon_alms
 
 # get normalizations from tempura
@@ -116,6 +136,7 @@ def tempura_norm(ests, ucls, tcls,
                                lmin, lmax, k_ellmax, no_corr=False)[ests[0]]
 
 # get normalizations from symlens, standard way
+# unused function
 def symlens_norm(sym_lmin=SYM_LMIN, sym_lmax=SYM_LMAX,
                  sym_glmin=SYM_LMIN, sym_glmax=SYM_LMAX):
 
@@ -130,11 +151,11 @@ def symlens_norm(sym_lmin=SYM_LMIN, sym_lmax=SYM_LMAX,
     modlmap = enmap.modlmap(sym_shape, sym_wcs)
 
     # from falafel/utils.py
-    thloc, th = import_theory_root()
+    #thloc, th = import_theory_root()
     # ells,gt,ge,gb,gte = np.loadtxt(f"{thloc}_camb_1.0.12_grads.dat",
     #                                unpack=True,usecols=[0,1,2,3,4])
 
-    nells = (NOISE_T*np.pi/180./60.)**2. / sutils.gauss_beam(BEAM_FWHM,modlmap)**2.
+    #nells = (NOISE_T*np.pi/180./60.)**2. / sutils.gauss_beam(BEAM_FWHM,modlmap)**2.
     
     feed_dict['uC_T_T'] = th.lCl('TT',modlmap)
     feed_dict['tC_T_T'] = feed_dict['uC_T_T'] + nells
@@ -174,10 +195,10 @@ def read_kappa_map(kap_filename=KAP_FILENAME, res=RESOLUTION):
 # alms are the output values from falafel QE
 def mapper(norms, alms, res=RESOLUTION, lmin=LMIN, lmax=LMAX):
     shape, wcs = enmap.fullsky_geometry(res=res)
-    phi_product = almxfl(alms['TT'][0].astype(np.complex128),
-                         np.array([0. if (i < LMIN or i > LMAX)
-                                   else norms[i] for i in range(len(norms))]))
-    return alm2map(phi_to_kappa(phi_product), enmap.empty(shape, wcs, dtype=np.float32))
+    phi_product = almxfl(alms['TT'][0].astype(np.complex128), 
+                         np.array([0. if (i < lmin or i > lmax)
+                                  else norms[i] for i in range(len(norms))]))
+    return alm2map(phi_product, enmap.empty(shape, wcs, dtype=np.float32))
 
 # stack recon maps 
 def stack_recon_maps(kappa_map, kapfile_map, 
@@ -270,7 +291,8 @@ def radial_avg_own(imap, res, bins, weights=None):
         (xcoords, ycoords) = np.where(np.logical_and(dmap >= in_bin, dmap < out_bin))
         coords = [(xcoords[i], ycoords[i]) for i in range(len(xcoords))]
         # sum of values within the annulus of distance
-        result.append(sum([imap[x,y] for (x,y) in coords]) / len(coords))
+        if len(coords) == 0: result.append(0.)
+        else: result.append(sum([imap[x,y] for (x,y) in coords]) / len(coords))
         
     return result
 
@@ -299,8 +321,8 @@ def get_s_norms(ests, ucls, tcls, lmin, lmax, shape, wcs,
     modlmap = enmap.modlmap(shape, wcs)
     kmask = sutils.mask_kspace(shape, wcs, lmin=lmin, lmax=lmax)
     g_kmask = sutils.mask_kspace(shape, wcs,
-                                 lmin=(LMIN if GLMIN == None else GLMIN),
-                                 lmax=(LMAX if GLMAX == None else GLMAX))
+                                 lmin=(lmin if GLMIN == None else GLMIN),
+                                 lmax=(lmax if GLMAX == None else GLMAX))
     
     results = {}
     for est in ests:
@@ -320,7 +342,7 @@ def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
     binner = stats.bin2D(modlmap, Lrange)
 
     l_factor = modlmap * (modlmap + 1) / 4.
-    centers, binned_norms = binner.bin(s_norms * l_factor)
+    centers, binned_norms = binner.bin(s_norms)
     
     # generate norms object by interpolating
     Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
@@ -372,9 +394,9 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
                                                                 res = res)
         struct.append((stacked_map, avg_map))
     
-    figscale_y = figscale * 3 // 4 * len(struct)
-    fig, axes = plt.subplots(nrows=1, ncols=len(struct), figsize=(figscale, figscale_y))
-
+    figscale_x = figscale * 3 // 4 * len(struct)
+    fig, axes = plt.subplots(nrows=1, ncols=len(struct), figsize=(figscale_x, figscale))
+    
     ims = []
     for i in range(len(struct)):
         im = axes[i].imshow(struct[i][0 if stacked_maps else 1], cmap='jet')
@@ -388,6 +410,7 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
 
     plt.tight_layout()
     plt.savefig(output_filename)
+    plt.clf()
 
     return [elem[0 if stacked_maps else 1] for elem in struct]
 
@@ -396,14 +419,16 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
 # from the center. Returns kappa(radians) for each map, satisfying the same order as the input.
 def radial_profiles(signal_maps, labels=None, 
                     output_filename="binned_radial_profiles.png",
-                    radius=10*RESOLUTION, res=RESOLUTION, Nbins = 20):
+                    radius=10*RESOLUTION, res=RESOLUTION, Nbins = 20, figsize=10):
 
+    
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
     binned_profiles = []
     for imap in signal_maps:
         binned_profiles.append(radial_avg_own(imap, res, radius_bins))
     
+    plt.figure(figsize=(figsize, figsize))
     plt.title("Average binned radial profiles (kappa map)")
     plt.xlabel("Radians")
     plt.ylabel("Kappa")
@@ -413,6 +438,7 @@ def radial_profiles(signal_maps, labels=None,
     
     if labels is not None: plt.legend()
     plt.savefig(output_filename)
+    plt.clf()
 
     return binned_profiles
 

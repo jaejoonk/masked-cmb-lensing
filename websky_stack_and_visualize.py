@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import healpy as hp
 from healpy.fitsfunc import read_alm,read_map
 
+import multiprocessing as mp
+
 import requests, os
 
 WEBSKY_SITE = "https://mocks.cita.utoronto.ca/data/websky/v0.0/"
@@ -140,14 +142,25 @@ def read_coords_from_file(input_filename, lowlim=None, highlim=None):
 
 # stack and average on a random subset of coordinates
 # output stack, average maps
+# default parallelized
+def thumbnails_kw(i, c, radius, res):
+        return thumbnails(i, c, r=radius, res=res)
+    
 def stack_average_random(imap, ra, dec, Ncoords=NCOORDS,
                          radius=RAD, res=RESOLUTION):
     idx_random = np.random.choice(len(ra), Ncoords, replace=False)
     coords = np.array([[dec[i], ra[i]] for i in idx_random])
-
-    # create thumbnails
-    thumbs = thumbnails(imap, coords, r = radius, res=res)
-
+    
+    # split up coords
+    #multi_coords = np.array_split(coords, mp.cpu_count())
+    #params = [(imap, multi_coords[i], radius, res) for i in range(len(multi_coords))]
+    # create thumbnails in parallelization
+    #pool = mp.Pool(mp.cpu_count())
+    #thumbs = pool.starmap(thumbnails_kw, params)
+    
+    #pool.close()
+    
+    thumbs = thumbnails(imap, coords, r=radius, res=res)
     # stack
     stack_map = 0
     for i in range(len(thumbs)):
