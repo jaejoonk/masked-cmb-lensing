@@ -9,12 +9,19 @@ import os,sys
 import healpy as hp
 from falafel import qe,utils as futils
 
+import json,pickle
+
 import pytempura
 import timings
 """
 Verify full-sky lensing with flat-sky norm. Going to try to adapt for temperatures only for now.
 No MPI
 """
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 import argparse
 # Parse command line
@@ -46,7 +53,7 @@ mlmax = max(args.lmaxt,args.lmaxp) + 2000
 px = qe.pixelization(shape=shape, wcs=wcs)
 
 # Data location
-DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
+DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/"
 LENSED_CMB_ALMS_LOC = DIR + "lensed_alm.fits"
 KAP_LOC = DIR + "kap.fits"
 
@@ -78,11 +85,17 @@ T.add("data, map, beam+noise setup")
 ucls, tcls = futils.get_theory_dicts(lmax=mlmax)
 
 # Norms
-ESTIMATORS = ['EB', 'MVPOL']
+ESTIMATORS = ['TT', 'EE', 'EB', 'MVPOL']
 
-Als = pytempura.get_norms(ESTIMATORS, ucls, tcls, args.lmint, args.lminp)
+Als = pytempura.get_norms(ESTIMATORS, ucls, tcls, args.lmint, args.lmaxt)
 ls = np.arange(len(Als[ESTIMATORS[0]][0]))
 
+# dumping
+labels = {est: Als[est] for est in Als.keys()}
+np.savez("Als", **labels)
+print(Als['TT'])
+print()
+print(np.load("Als.npz")['TT'])
 T.add("get theory dicts + norms")
 
 # Read alms
@@ -100,7 +113,6 @@ balm_y = qe.filter_alms(alm[2],1./(ucls['BB'] + npp(np.arange(len(ucls['BB']))))
 
 # Inputs
 ikalm = maps.change_alm_lmax(hp.map2alm(hp.read_map(KAP_LOC), lmax=args.lmaxt),mlmax)
-
 T.add("read alms, filter + add noise")
 
 if args.all:
@@ -135,7 +147,7 @@ else:
     recon_eonly = qe.qe_pol_only(px,e0alm_x,e0alm_x*0,ealm_y,ealm_y*0,mlmax)
     reduce("EE",recon_eonly,ikalm)
     del recon_eonly, ealm_x, ealm_y
-        
+
 s.add_to_stats("iauto",hp.alm2cl(ikalm,ikalm))
 del ikalm
 
@@ -155,36 +167,48 @@ for comb in combs:
         cls[comb][stat] = {}
         cls[comb][stat]['mean'] = s.stats[comb+"_"+stat]['mean']
         cls[comb][stat]['err'] = s.stats[comb+"_"+stat]['errmean']
-        
+
 T.add("get stats for all combinations")
 print("all data processed")
 
+# dump ucls
+np.savetxt("ucls-kk.txt", ucls['kk'])
+    
+# dump iauto-mean
+np.savetxt("iauto-mean-icls.txt", icls)
+
 # Make plots
 for comb in combs:
+    # dump cls[comb]
+    for stat in ostats:
+        np.savez("cls-"+comb+"-"+stat, mean=cls[comb][stat]['mean'],
+                                       err=cls[comb][stat]['err'])
+
     # grad
     pl = io.Plotter(xyscale='loglog',xlabel='$L$',ylabel='$C_L$')
     fells = np.arange(2,mlmax)
-    pl.add(fells,ucls['kk'][fells],lw=3)
-    pl.add(ells,icls,color='k',alpha=0.5)
-    pl.add(ls,Als[comb][0]*ls*(ls+1)/4.,ls="--")
+    pl.add(fells,ucls['kk'][fells],lw=3, label="theory")
+    pl.add(ells,icls,color='k',alpha=0.5, label="input auto PS")
+    pl.add(ls,Als[comb][0]*ls*(ls+1)/4.,ls="--", label="noise PS (per mode)")
         #if comb=='TE': pl.add(ls,Al_te_alt*ls*(ls+1)/4.,ls="-.")
-    pl.add(ls,maps.interp(ells,icls)(ls) + (Als[comb][0]*ls*(ls+1)/4.))
+    pl.add(ls,maps.interp(ells,icls)(ls) + (Als[comb][0]*ls*(ls+1)/4.), label="noise + auto PS")
     pl.add_err(ells,cls[comb]['gauto']['mean'],yerr=cls[comb]['gauto']['err'])
     pl.add_err(ells,cls[comb]['gcross']['mean'],yerr=cls[comb]['gauto']['err'])
-    pl._ax.set_ylim(1e-9,4e-6)
+    # pl._ax.set_ylim(1e-9,4e-6)
+    pl._ax.legend()
     pl.done(DIR+'verify_grad_%s.png' % comb)
 
     # grad diff
     pl = io.Plotter(xyscale='loglin',xlabel='$L$',ylabel='$\\Delta C_L / C_L$')
-    pl.add_err(ells,(cls[comb]['gcross']['mean']-icls)/icls,yerr=cls[comb]['gcross']['err']/icls)
+    pl.add(ells,(cls[comb]['gcross']['mean']-icls)/icls)
     pl.hline()
-    pl._ax.set_ylim(-0.2,0.4)
+    # pl._ax.set_ylim(-0.2,0.4)
     pl.done(DIR+'verify_grad_diff_%s.png' % comb)
 
     pl = io.Plotter(xyscale='linlin',xlabel='$L$',ylabel='$\\Delta C_L / C_L$')
-    pl.add_err(ells,(cls[comb]['gcross']['mean']-icls)/icls,yerr=cls[comb]['gcross']['err']/icls)
+    pl.add(ells,(cls[comb]['gcross']['mean']-icls)/icls)
     pl.hline()
-    pl._ax.set_ylim(-0.2,0.4)
+    # pl._ax.set_ylim(-0.2,0.4)
     pl.done(DIR+'verify_grad_diff_lin_%s.png' % comb)
         
     # curl

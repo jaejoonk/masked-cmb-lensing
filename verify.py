@@ -40,7 +40,8 @@ mlmax = max(args.lmaxt,args.lmaxp) + 2000
 px = qe.pixelization(shape=shape, wcs=wcs)
 
 # Sim location
-DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
+#DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
+DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky"
 LENSED_CMB_ALMS_LOC = DIR + "lensed_alm.fits"
 KAP_LOC = DIR + "kap.fits"
 
