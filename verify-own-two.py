@@ -13,6 +13,9 @@ import json,pickle
 
 import pytempura
 import timings
+
+NBINS = 30
+
 """
 Verify full-sky lensing with flat-sky norm. Going to try to adapt for temperatures only for now.
 No MPI
@@ -53,7 +56,8 @@ mlmax = max(args.lmaxt,args.lmaxp) + 2000
 px = qe.pixelization(shape=shape, wcs=wcs)
 
 # Data location
-DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/"
+#DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/"
+DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
 LENSED_CMB_ALMS_LOC = DIR + "lensed_alm.fits"
 KAP_LOC = DIR + "kap.fits"
 
@@ -85,7 +89,7 @@ T.add("data, map, beam+noise setup")
 ucls, tcls = futils.get_theory_dicts(lmax=mlmax)
 
 # Norms
-ESTIMATORS = ['TT', 'EE', 'EB', 'MVPOL']
+ESTIMATORS = ['TT', 'EE']
 
 Als = pytempura.get_norms(ESTIMATORS, ucls, tcls, args.lmint, args.lmaxt)
 ls = np.arange(len(Als[ESTIMATORS[0]][0]))
@@ -93,9 +97,6 @@ ls = np.arange(len(Als[ESTIMATORS[0]][0]))
 # dumping
 labels = {est: Als[est] for est in Als.keys()}
 np.savez("Als", **labels)
-print(Als['TT'])
-print()
-print(np.load("Als.npz")['TT'])
 T.add("get theory dicts + norms")
 
 # Read alms
@@ -177,6 +178,11 @@ np.savetxt("ucls-kk.txt", ucls['kk'])
 # dump iauto-mean
 np.savetxt("iauto-mean-icls.txt", icls)
 
+# bin
+bin_edges = np.geomspace(2, mlmax, NBINS)
+binner = stats.bin1D(bin_edges)
+bin_fn = lambda x: binner.bin(ells, x)
+
 # Make plots
 for comb in combs:
     # dump cls[comb]
@@ -192,29 +198,31 @@ for comb in combs:
     pl.add(ls,Als[comb][0]*ls*(ls+1)/4.,ls="--", label="noise PS (per mode)")
         #if comb=='TE': pl.add(ls,Al_te_alt*ls*(ls+1)/4.,ls="-.")
     pl.add(ls,maps.interp(ells,icls)(ls) + (Als[comb][0]*ls*(ls+1)/4.), label="noise + auto PS")
-    pl.add_err(ells,cls[comb]['gauto']['mean'],yerr=cls[comb]['gauto']['err'])
-    pl.add_err(ells,cls[comb]['gcross']['mean'],yerr=cls[comb]['gauto']['err'])
+    pl.add(ells,cls[comb]['gauto']['mean'], label="auto mean")
+    # bin cross mean?
+    pl.add(*bin_fn(cls[comb]['gcross']['mean']), label="cross mean")
     # pl._ax.set_ylim(1e-9,4e-6)
     pl._ax.legend()
     pl.done(DIR+'verify_grad_%s.png' % comb)
 
     # grad diff
     pl = io.Plotter(xyscale='loglin',xlabel='$L$',ylabel='$\\Delta C_L / C_L$')
-    pl.add(ells,(cls[comb]['gcross']['mean']-icls)/icls)
+    pl.add(*bin_fn((cls[comb]['gcross']['mean']-icls)/icls), label="grad diff")
     pl.hline()
     # pl._ax.set_ylim(-0.2,0.4)
     pl.done(DIR+'verify_grad_diff_%s.png' % comb)
 
     pl = io.Plotter(xyscale='linlin',xlabel='$L$',ylabel='$\\Delta C_L / C_L$')
-    pl.add(ells,(cls[comb]['gcross']['mean']-icls)/icls)
+    pl.add(*bin_fn((cls[comb]['gcross']['mean']-icls)/icls), label="grad diff")
     pl.hline()
     # pl._ax.set_ylim(-0.2,0.4)
     pl.done(DIR+'verify_grad_diff_lin_%s.png' % comb)
         
     # curl
     pl = io.Plotter(xyscale='loglin',xlabel='$L$',ylabel='$C_L$')
-    pl.add_err(ells,cls[comb]['ccross']['mean'],yerr=cls[comb]['cauto']['err'])
+    pl.add(ells,cls[comb]['ccross']['mean'], label="cross mean")
     pl.hline()
+    pl._ax.legend()
     pl.done(DIR+'verify_curl_%s.png' % comb)
 
 T.add("plot all")
