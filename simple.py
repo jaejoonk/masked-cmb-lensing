@@ -11,7 +11,7 @@ import pytempura
 # The estimators to test lensing for
 # ests = ['TT','mv','mvpol','EE','TE','EB','TB']
 #ests = ['mv']
-ests = ['EE']
+ests = ['TT', 'EE', 'TE', 'EB', 'MVPOL']
 
 # Decide on a geometry for the intermediate operations
 res = 1.5 # resolution in arcminutes
@@ -28,14 +28,15 @@ mlmax = 8000
 # Filtering configuration
 lmax = 6000
 lmin = 300
-beam_fwhm = 0.
-noise_t = 0.
+beam_fwhm = 1.5
+noise_t = 10.
 
 # Get CMB alms
 #alm = utils.get_cmb_alm(sindex,0)
-ALM_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/lensed_alm.fits"
+#ALM_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/lensed_alm.fits"
+ALM_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/lensed_alm.fits"
 omap = enmap.empty(shape, wcs, dtype=np.float32)
-alm = hp.read_alm(ALM_LOC)
+alm = hp.read_alm(ALM_LOC, hdu=(1,2,3))
 
 # Get theory spectra
 ucls,tcls = utils.get_theory_dicts_white_noise(beam_fwhm,noise_t)
@@ -45,7 +46,7 @@ ucls,tcls = utils.get_theory_dicts_white_noise(beam_fwhm,noise_t)
 Als = pytempura.get_norms(ests,ucls,tcls,lmin,lmax,k_ellmax=mlmax,no_corr=False)
 
 # Filter
-Xdat = utils.isotropic_filter([alm*0., alm, alm*0.],tcls,lmin,lmax)
+Xdat = utils.isotropic_filter(alm,tcls,lmin,lmax)
 
 # Reconstruct
 recon = qe.qe_all(px,ucls,mlmax,
@@ -54,7 +55,7 @@ recon = qe.qe_all(px,ucls,mlmax,
                   xfTalm=Xdat[0],xfEalm=Xdat[1],xfBalm=Xdat[2])
     
 # Get input kappa alms
-KAP_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/kap.fits"
+KAP_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/kap.fits"
 ikalm = utils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_LOC)), mlmax)
 
 
@@ -79,7 +80,7 @@ for est in ests:
     pl.add(ells,icls, label = 'i x i')
     pl2.add(*bin((cls-icls)/icls),marker='o')
     pl2.hline(y=0)
-    #pl2._ax.set_ylim(-0.1,0.1)
+    pl2._ax.set_ylim(-0.1,0.1)
     pl2.done(f'simple_recon_diff_{est}.png')
     #pl._ax.set_ylim(1e-9,1e-5)
     pl.done(f'simple_recon_{est}.png')
