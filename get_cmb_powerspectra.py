@@ -17,7 +17,7 @@ def websky_cosmology():
 
     return output
 
-def websky_cmb_spectra(return_lensing = False, return_tensors = False):
+def websky_cmb_spectra(return_lensing = False, lmax = 10000, return_tensors = False):
 
     websky_params = websky_cosmology()
 
@@ -40,7 +40,7 @@ def websky_cmb_spectra(return_lensing = False, return_tensors = False):
         ns = websky_params['n_s'],
         r= (0 if (not return_tensors) else 1) , nt = 0)
 
-    pars.set_for_lmax(10000, lens_potential_accuracy=2)
+    pars.set_for_lmax(lmax, lens_potential_accuracy=2)
 
 
     results = camb.get_results(pars)

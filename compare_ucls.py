@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 LMAX=10050
 websky_obj = websky_cmb.websky_cmb_spectra()
-ucls_falafel, _ = futils.get_theory_dicts(lmax=LMAX)
+ucls_falafel, _ = futils.get_theory_dicts(lmax=LMAX, grad=False)
 
 ucls_websky = {}
-ucls_websky['TT'] = websky_obj['unlensed_scalar'][0,0,:]
-ucls_websky['EE'] = websky_obj['unlensed_scalar'][1,1,:]
-ucls_websky['TE'] = websky_obj['unlensed_scalar'][1,0,:]
-ucls_websky['BB'] = websky_obj['unlensed_scalar'][2,2,:]
+ucls_websky['TT'] = websky_obj['lensed_scalar'][0,0,:]
+ucls_websky['EE'] = websky_obj['lensed_scalar'][1,1,:]
+ucls_websky['TE'] = websky_obj['lensed_scalar'][1,0,:]
+ucls_websky['BB'] = websky_obj['lensed_scalar'][2,2,:]
 
 ells = np.arange(LMAX+1)
 for est in ['TT', 'EE', 'TE', 'BB']:
@@ -30,5 +30,6 @@ for est in ['TT', 'EE', 'TE', 'BB']:
     err = (ucls_websky[est] - ucls_falafel[est]) / ucls_falafel[est]
     plt.title("%% error of websky theory Cl vs falafel for %s estimator" % est)
     plt.plot(ells[2:], 100.*err[2:])
+    plt.ylim(-20.,20.)
     plt.savefig("compare-ucls-diff-%s.png" % est)
     plt.close()
