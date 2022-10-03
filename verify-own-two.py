@@ -56,8 +56,8 @@ mlmax = max(args.lmaxt,args.lmaxp) + 2000
 px = qe.pixelization(shape=shape, wcs=wcs)
 
 # Data location
-#DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/"
-DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
+DIR = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/"
+#DIR = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/"
 LENSED_CMB_ALMS_LOC = DIR + "lensed_alm.fits"
 KAP_LOC = DIR + "kap.fits"
 
@@ -89,14 +89,14 @@ T.add("data, map, beam+noise setup")
 ucls, tcls = futils.get_theory_dicts(lmax=mlmax)
 
 # Norms
-ESTIMATORS = ['TT', 'EE']
+ESTIMATORS = ['TT','TE','EE','EB','TB','MV','MVPOL']
 
 Als = pytempura.get_norms(ESTIMATORS, ucls, tcls, args.lmint, args.lmaxt)
 ls = np.arange(len(Als[ESTIMATORS[0]][0]))
 
 # dumping
-labels = {est: Als[est] for est in Als.keys()}
-np.savez("Als", **labels)
+#labels = {est: Als[est] for est in Als.keys()}
+#np.savez("Als", **labels)
 T.add("get theory dicts + norms")
 
 # Read alms
@@ -170,13 +170,13 @@ for comb in combs:
         cls[comb][stat]['err'] = s.stats[comb+"_"+stat]['errmean']
 
 T.add("get stats for all combinations")
-print("all data processed")
+#print("all data processed")
 
 # dump ucls
-np.savetxt("ucls-kk.txt", ucls['kk'])
+#np.savetxt("ucls-kk.txt", ucls['kk'])
     
 # dump iauto-mean
-np.savetxt("iauto-mean-icls.txt", icls)
+#np.savetxt("iauto-mean-icls.txt", icls)
 
 # bin
 bin_edges = np.geomspace(2, mlmax, NBINS)
@@ -186,9 +186,9 @@ bin_fn = lambda x: binner.bin(ells, x)
 # Make plots
 for comb in combs:
     # dump cls[comb]
-    for stat in ostats:
-        np.savez("cls-"+comb+"-"+stat, mean=cls[comb][stat]['mean'],
-                                       err=cls[comb][stat]['err'])
+    #for stat in ostats:
+    #    np.savez("cls-"+comb+"-"+stat, mean=cls[comb][stat]['mean'],
+    #                                   err=cls[comb][stat]['err'])
 
     # grad
     pl = io.Plotter(xyscale='loglog',xlabel='$L$',ylabel='$C_L$')
@@ -200,10 +200,10 @@ for comb in combs:
     pl.add(ls,maps.interp(ells,icls)(ls) + (Als[comb][0]*ls*(ls+1)/4.), label="noise + auto PS")
     pl.add(ells,cls[comb]['gauto']['mean'], label="auto mean")
     # bin cross mean?
-    pl.add(*bin_fn(cls[comb]['gcross']['mean']), label="cross mean")
+    pl.add(ells,np.abs(cls[comb]['gcross']['mean']), label="cross mean")
     # pl._ax.set_ylim(1e-9,4e-6)
     pl._ax.legend()
-    pl.done(DIR+'verify_grad_%s.png' % comb)
+    pl.done(DIR+'verify_abs_grad_%s.png' % comb)
 
     # grad diff
     pl = io.Plotter(xyscale='loglin',xlabel='$L$',ylabel='$\\Delta C_L / C_L$')

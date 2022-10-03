@@ -315,8 +315,7 @@ def radial_sum_own(imap, res, bins, weights=None):
 # own symlens wrappers
 ###############################################
 def get_s_norms(ests, ucls, tcls, lmin, lmax, shape, wcs,
-                GLMIN = None, GLMAX = None, noise_t = NOISE_T,
-                beam_fwhm = BEAM_FWHM, grad_cut=False):
+                GLMIN = None, GLMAX = None, grad_cut=False):
     feed_dict = {}
     modlmap = enmap.modlmap(shape, wcs)
     kmask = sutils.mask_kspace(shape, wcs, lmin=lmin, lmax=lmax)
@@ -336,13 +335,20 @@ def get_s_norms(ests, ucls, tcls, lmin, lmax, shape, wcs,
     return results
 
 def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
+    # return formatted norm for each estimator if multiple are provided
+    if isinstance(s_norms, dict):
+        result = {}
+        for est in s_norms.keys():
+            result[est] = s_norms_formatter(s_norms[est],kells,shape,wcs,lmin,lmax,lwidth)
+        return result
+
     # binning 
     modlmap = enmap.modlmap(shape, wcs)
     Lrange = np.arange(lmin, lmax, lwidth)
     binner = stats.bin2D(modlmap, Lrange)
 
     l_factor = modlmap * (modlmap + 1) / 4.
-    centers, binned_norms = binner.bin(s_norms)
+    centers, binned_norms = binner.bin(np.array(s_norms))
     
     # generate norms object by interpolating
     Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
