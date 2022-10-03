@@ -347,11 +347,13 @@ def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
     Lrange = np.arange(lmin, lmax, lwidth)
     binner = stats.bin2D(modlmap, Lrange)
 
-    l_factor = modlmap * (modlmap + 1) / 4.
+    # double check this!!
+    #l_factor = modlmap * (modlmap + 1) / 4.
     centers, binned_norms = binner.bin(np.array(s_norms))
     
     # generate norms object by interpolating
-    Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
+    lfactor = 1. / (kells * (kells + 1))
+    Al = maps.interp(centers, binned_norms, kind='cubic')(kells) * lfactor
     return Al
 
 ###############################################
