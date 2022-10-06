@@ -18,10 +18,10 @@ t1 = time.time()
 ests = ['TT']
 
 #CMB_ALM_LOC = "/global/project/projectdirs/act/data/actsims_data/signal_v0.4/fullskyUnlensedCMB_alm_set00_00000.fits" 
-KAP_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/kap.fits"
-WEBSKY_ALM_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/lensed_alm.fits"
-#KAP_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/kap.fits"
-#WEBSKY_ALM_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/lensed_alm.fits"
+#KAP_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/kap.fits"
+#WEBSKY_ALM_LOC = "/home/joshua/research/cmb_lensing_2022/masked-cmb-lensing/lensed_alm.fits"
+KAP_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/kap.fits"
+WEBSKY_ALM_LOC = "/global/homes/j/jaejoonk/masked-cmb-lensing/websky/lensed_alm.fits"
 
 # Decide on a geometry for the intermediate operations
 res = 1.5 # resolution in arcminutes
@@ -60,8 +60,8 @@ def noised_tcls(ucls, beam_fwhm, noise_t, noise_p=None):
     
     return tcls
 
-def get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, noise_p=None, nells=None, lmax=mlmax):
-    websky_spectra = websky_theory.websky_cmb_spectra(return_lensing=True, lmax= lmax)
+def get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=True, noise_p=None, nells=None, lmax=mlmax):
+    websky_spectra = websky_theory.websky_cmb_spectra(return_lensing=True, lmax=lmax, grad=grad)
 
     ucls = {}
     ucls['TT'] = websky_spectra['lensed_scalar'][0,0,:]
@@ -130,7 +130,7 @@ for est in ests:
         pl = io.Plotter('CL')
         pl._ax.set_title("recon vs input for \'%s\' est, (glmax=%d, lmax=%d)" % (est, glmax, lmax))
         pl2 = io.Plotter('rCL',xyscale='loglin')
-        pl2._ax.set_title("Delta C_l^(k-hat,k) / C_l^(kk) %% error for \'%s\' est (glmax=%d, lmax=%d)" % (est, glmax, lmax))
+        pl2._ax.set_title("Delta C_l^(k-hat,k) / C_l^(kk) for \'%s\' est (glmax=%d, lmax=%d)" % (est, glmax, lmax))
         #kalms[est] = plensing.phi_to_kappa(hp.almxfl(recon[est][0].astype(np.complex128),Als_temp[est][0])) # ignore curl
         kalms[est] = plensing.phi_to_kappa(hp.almxfl(recon[est][0].astype(np.complex128),Als[est])) # ignore curl
         pl.add(ells,(ells*(ells+1.)/2.)**2. * Als[est],ls='--', label="noise PS (per mode)")
@@ -141,7 +141,7 @@ for est in ests:
         pl.add(ells,icls, label = 'i x i')
         pl2.add(*bin((cls-icls)/icls),marker='o')
         pl2.hline(y=0)
-        pl2._ax.set_ylim(-0.2,0.1)
+        pl2._ax.set_ylim(-0.1,0.05)
         pl2.done(f'websky_gcut_simple_recon_diff_{est}_{j}.png')
         #pl._ax.set_ylim(1e-9,1e-5)
         pl.done(f'websky_gcut_simple_recon_{est}_{j}.png')

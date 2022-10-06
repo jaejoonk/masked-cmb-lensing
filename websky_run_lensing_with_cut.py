@@ -27,6 +27,7 @@ from orphics import maps, cosmology, io, stats, pixcov
 # my own files
 import websky_stack_and_visualize as josh_websky
 import websky_lensing_reconstruction as josh_wlrecon
+# from gcut_simple import get_theory_dicts_white_noise_websky 
 
 ###############################################
 # constants
@@ -34,13 +35,13 @@ import websky_lensing_reconstruction as josh_wlrecon
 DEBUG = True
 
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
-KAP_FILENAME = "kap.fits"
-KSZ_FILENAME = "ksz.fits"
-ALM_FILENAME = "lensed_alm.fits"
-HALOS_FILENAME = "halos.pksc"
-COORDS_FILENAME = "2e6_massive_halos.txt"
-OUTPUT_STACKS_FILENAME = "full-data-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = "full-kappa-binned-rprofiles.png"
+KAP_FILENAME = "websky/kap.fits"
+#KSZ_FILENAME = "websky/ksz.fits"
+ALM_FILENAME = "websky/lensed_alm.fits"
+HALOS_FILENAME = "$SCRATCH/halos.pksc"
+COORDS_FILENAME = "output_halos.txt"
+OUTPUT_STACKS_FILENAME = "new-data-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = "new-kappa-binnedrprofiles.png"
 NCOORDS = 10000
 NBINS = 20
 LWIDTH = 50
@@ -57,9 +58,9 @@ MIN_MASS = 1. # 1e14 solar masses
 MAX_MASS = 40. # 1e14 solar masses
 
 LMIN = 300
-LMAX = 6000
+LMAX = 5000
 GLMAX = 2000
-MLMAX = 8000
+MLMAX = 5100
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']

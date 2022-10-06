@@ -24,20 +24,21 @@ import pytempura
 
 from orphics import maps, cosmology, io, stats, pixcov
 
-# my own file
+# my own file(s)
 import websky_stack_and_visualize as josh_websky
+import cmb_ps
 
 ###############################################
 # constants
 ###############################################
 
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
-KAP_FILENAME = "kap.fits"
-KSZ_FILENAME = "ksz.fits"
-ALM_FILENAME = "lensed_alm.fits"
-HALOS_FILENAME = "halos_10x10.pksc"
-COORDS_FILENAME = "1e7_massive_halos.txt"
-NCOORDS = 1000
+KAP_FILENAME = "websky/kap.fits"
+#KSZ_FILENAME = "websky/ksz.fits"
+ALM_FILENAME = "websky/lensed_alm.fits"
+HALOS_FILENAME = "$SCRATCH/halos.pksc"
+COORDS_FILENAME = "output_halos.txt"
+NCOORDS = 10000
 
 RESOLUTION = np.deg2rad(1.5 / 60.)
 STACK_RES = np.deg2rad(1.0 / 60.)
@@ -103,7 +104,7 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
     alms = map2alm(alm_map, lmax=lmax)
     # falafel.utils to get ucls and tcls
     # this function calls cosmology.loadTheorySpectraFromCAMB
-    ucls, tcls = utils.get_theory_dicts_white_noise(beam_fwhm, noise_t, grad=grad)
+    ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad)
     # returns [fTalm, fEalm, fBalm]
     fTalm = utils.isotropic_filter([alms, alms*0., alms*0.], tcls,
                                     lmin, lmax, ignore_te=True)[0]

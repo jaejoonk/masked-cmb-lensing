@@ -1,7 +1,8 @@
-# stolen from https://github.com/ajvanengelen/webskylensing/ (py/get_cmb_powerspectra.py)
-
+# websky functions stolen from https://github.com/ajvanengelen/webskylensing/ (py/get_cmb_powerspectra.py)
 import camb, numpy as np
 import pdb
+from orphics import cosmology, maps
+
 
 def websky_cosmology():
 #stolen from ~https://mocks.cita.utoronto.ca/data/websky/v0.0/cosmology.py
@@ -83,6 +84,37 @@ def websky_cmb_spectra(return_lensing = False, lmax = 10000, grad = False, retur
         # output['lens_potential'][0,0,:] = powers['unlensed_scalar'][:, 0] * camb_factor
 
     # pdb.set_trace()
-
     return output
+
+## Get theory spectra
+
+# noise_t, noise_p in muK, beam_fwhm in arcmin
+def noised_tcls(ucls, beam_fwhm, noise_t, noise_p=None):
+    tcls = {}
+    ells = np.arange(ucls[list(ucls.keys())[0]].size)
+    if noise_p == None: noise_p = noise_t * np.sqrt(2.)
+    
+    ncls_T = ((noise_t * np.pi/180./60.) / maps.gauss_beam(beam_fwhm, ells))**2
+    ncls_P = ((noise_p * np.pi/180./60.) / maps.gauss_beam(beam_fwhm, ells))**2
+    
+    tcls['TT'] = ucls['TT'] + ncls_T
+    tcls['EE'] = ucls['EE'] + ncls_P
+    tcls['TE'] = ucls['TE']
+    tcls['BB'] = ucls['BB'] + ncls_P
+    
+    return tcls
+
+def get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=True, noise_p=None, nells=None, lmax=5000):
+    websky_spectra = websky_cmb_spectra(return_lensing=True, lmax=lmax, grad=grad)
+
+    ucls = {}
+    ucls['TT'] = websky_spectra['lensed_scalar'][0,0,:]
+    ucls['TE'] = websky_spectra['lensed_scalar'][0,1,:]
+    ucls['EE'] = websky_spectra['lensed_scalar'][1,1,:]
+    ucls['BB'] = websky_spectra['lensed_scalar'][2,2,:]
+    ucls['kk'] = websky_spectra['lens_potential']
+
+    tcls = noised_tcls(ucls, beam_fwhm, noise_t, noise_p)
+    
+    return ucls, tcls
 
