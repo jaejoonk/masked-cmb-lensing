@@ -88,7 +88,7 @@ sym_gnorms = [wl_recon.get_s_norms(ests,ucls,tcls,lmin,lmaxes[i],sym_shape,sym_w
 # LMIN = 1, LWIDTH (FOR BINNING) = 50
 #Als_temp = pytempura.get_norms(ests,ucls,tcls,lmin,lmax,k_ellmax=mlmax,no_corr=False)
 Als_sym = [wl_recon.s_norms_formatter(sym_gnorms[i],kells,sym_shape,sym_wcs,1,lmaxes[i],50)
-           for i in range(len(lmaxes))]
+           for i  in range(len(lmaxes))]
 
 #np.savetxt("als-temp.txt", Als_temp['TT'][0])
 #np.savetxt("als-sym.txt", Als_sym['TT'])

@@ -85,6 +85,10 @@ def almfile_to_map(alm_filename = ALM_FILENAME, res = RESOLUTION):
     alm_px = alm2map(alm_hp, omap)
     return alm_px
 
+# do same as above but only return the alm array object
+def almfile_to_alms(alm_filename = ALM_FILENAME):
+    return read_alm(alm_filename, hdu=(1,2,3))
+
 # filter convergence file to an lmax and return map
 def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
     # create a pixell shape + wcs for the full sky geometry with an input resolution
@@ -106,12 +110,17 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
     # this function calls cosmology.loadTheorySpectraFromCAMB
     ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad)
     # returns [fTalm, fEalm, fBalm]
-    fTalm = utils.isotropic_filter([alms, alms*0., alms*0.], tcls,
-                                    lmin, lmax, ignore_te=True)[0]
+    fTalm = utils.isotropic_filter([alms, alms*0., alms*0.], tcls, lmin, lmax, ignore_te=True)[0]
     # beam?
     # fTalm = almxfl(fTalm, lambda ells: 1./sutils.gauss_beam(ells, beam_fwhm))
     
     return ucls, tcls, fTalm
+
+def alms_inverse_filter(alms, lmin = LMIN, lmax = LMAX, 
+                        beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad=True):
+    ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
+    fTalm = utils.isotropic_filter(alms, tcls, lmin, lmax)
+    return ucls, tcls, fTalm[0]
 
 # run the quadratic estimator from falafel
 # first index regular alms, second index gradient alms
@@ -353,8 +362,8 @@ def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
     centers, binned_norms = binner.bin(np.array(s_norms))
     
     # generate norms object by interpolating
-    lfactor = 1. / (kells * (kells + 1))
-    Al = maps.interp(centers, binned_norms, kind='cubic')(kells) * lfactor
+    #lfactor = 1. / (kells * (kells + 1))
+    Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
     return Al
 
 ###############################################
@@ -439,11 +448,11 @@ def radial_profiles(signal_maps, labels=None,
     
     plt.figure(figsize=(figsize, figsize))
     plt.title("Average binned radial profiles (kappa map)")
-    plt.xlabel("Radians")
+    plt.xlabel("arcmin")
     plt.ylabel("Kappa")
     for i in range(len(binned_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
-        plt.plot(radius_centers, binned_profiles[i], label=labeltext)
+        plt.plot(radius_centers * (180./np.pi) * 60., binned_profiles[i], label=labeltext)
     
     if labels is not None: plt.legend()
     plt.savefig(output_filename)
@@ -451,4 +460,29 @@ def radial_profiles(signal_maps, labels=None,
 
     return binned_profiles
 
+def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="binned_radial_profiles_ratio.png",
+                         radius=10*RESOLUTION, res=RESOLUTION, Nbins=20, figsize=10):
 
+    radius_bins = np.linspace(0, radius, Nbins)
+    radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
+    reference_profile = np.array(radial_avg_own(reference, res, radius_bins))
+    ratio_profiles = []
+    for imap in signal_maps:
+        imap_profile = np.array(radial_avg_own(imap, res, radius_bins))
+        ratio_profiles.append((imap_profile - reference_profile) / reference_profile)
+
+    plt.figure(figsize=(figsize, figsize))
+    plt.title("Difference in avg binned radial kappa profiles")
+    plt.xlabel("arcmin")
+    plt.ylabel(r'$(\kappa^{x} - \kappa^{WS kap.fits}) / \kappa^{WS kap.fits}$')
+
+    for i in range(len(ratio_profiles)):
+        labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
+        plt.plot(radius_centers * (180./np.pi) * 60., ratio_profiles[i], label=labeltext)
+
+    plt.plot(radius_centers * (180./np.pi) * 60., ratio_profiles[0] * 0., '--')
+    if labels is not None: plt.legend()
+    plt.savefig(output_filename)
+    plt.clf()
+
+    return ratio_profiles
