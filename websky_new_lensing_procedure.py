@@ -40,28 +40,28 @@ KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
 HALOS_FILENAME = "$SCRATCH/halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
-OUTPUT_STACKS_FILENAME = "new-data-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = "new-kappa-binnedrprofiles.png"
-OUTPUT_RRPROFILE_FILENAME = "new-kappa-binnedrprofiles-diff.png"
-NCOORDS = 5000
+OUTPUT_STACKS_FILENAME = "new-data-6to40-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = "new-kappa-6to40-binnedrprofiles.png"
+OUTPUT_RRPROFILE_FILENAME = "new-kappa-6to40-binnedrprofiles-diff.png"
+NCOORDS = 10000
 NBINS = 20
 LWIDTH = 50
 
-RESOLUTION = np.deg2rad(1.5 / 60.)
-STACK_RES = np.deg2rad(1.5 / 60.)
+RESOLUTION = np.deg2rad(0.5 / 60.)
+STACK_RES = np.deg2rad(0.5 / 60.)
 RADIUS = STACK_RES * 10. # 10 arcmin
-SYM_RES = np.deg2rad(1.5 / 60.)
+SYM_RES = np.deg2rad(0.5 / 60.)
 SYM_SHAPE = (4000,4000)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MIN_MASS = 2. # 1e14 solar masses
+MIN_MASS = 6. # 1e14 solar masses
 MAX_MASS = 40. # 1e14 solar masses
 
 LMIN = 300
-LMAX = 6000
+LMAX = 3000
 GLMAX = 2000
-MLMAX = 8000
+MLMAX = 6500
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']
@@ -76,7 +76,7 @@ def full_procedure(debug=DEBUG):
     alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
                                  lmax=MLMAX)
             
-    kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME,
+    kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, lmax=LMAX,
                                           res=RESOLUTION)
     kap_map = kap_map - kap_map.mean()
     
