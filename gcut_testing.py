@@ -29,9 +29,6 @@ shape,wcs = enmap.fullsky_geometry(res=np.deg2rad(res/60.),proj="car")
 ## create a pixelization object with shape/wcs
 px = qe.pixelization(shape,wcs)
 
-# Choose sim index
-sindex = 1
-
 # Maximum multipole for alms
 mlmax = 8000
 
@@ -42,9 +39,10 @@ lmin = 300
 beam_fwhm = 1.5
 noise_t = 10.
 
+## Theory
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, lmax=mlmax)
-## Get normalizations
 
+## Get normalizations
 # create a different normalization function/object for each (glmax,lmax) combination
 # and combine them into a list
 kells = np.arange(mlmax+1)
