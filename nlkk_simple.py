@@ -93,8 +93,8 @@ ells = np.arange(lmax+1)
 for est in ests:
     pl = io.Plotter('CL')
     pl._ax.set_title("Nlkk for \'%s\;' est, (glmax=%d, lmax=%d)" % (est, glmax, lmax))
-    pl.add(ells, (ells*(ells+1.))/4. * Als_sym[est], ls="--", label=("Nlkk, glmax=%d" % glmax))
-    pl.add(ells, (ells*(ells+1.))/4. * Als_g_sym[est], ls="--", label=("Nlkk, glmax=%d" % lmax))
+    pl.add(ells, (ells*(ells+1.))/4. * Als_sym[est], ls="--", label=("Nlkk, glmax=%d" % lmax))
+    pl.add(ells, (ells*(ells+1.))/4. * Als_g_sym[est], ls="--", label=("Nlkk, glmax=%d" % glmax))
     # pl.add(ells, (ells*(ells+1.)/2.)**2 * Als_temp[est][0], ls="--", label="Nlkk, tempura")
     
     pl.done(f'websky_nlkk_recon_{glmax}_cut_{lmax}.png')
