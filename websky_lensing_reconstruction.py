@@ -366,6 +366,17 @@ def s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
     Al = maps.interp(centers, binned_norms, kind='cubic')(kells)
     return Al
 
+def s_norms_formatter_to_temp(s_norms, kells, shape, wcs, lmin, lmax, lwidth):
+    Al = s_norms_formatter(s_norms, kells, shape, wcs, lmin, lmax, lwidth)
+    lfactor = 1. / (kells * (kells + 1))
+    
+    if isinstance(Al, dict):
+        result = {}
+        for est in Al.keys():
+            result[est] = Al[est] * lfactor
+        return result
+    else: return np.array(Al) * lfactor
+
 ###############################################
 # Mean field calculations
 ###############################################

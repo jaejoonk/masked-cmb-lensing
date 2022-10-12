@@ -36,13 +36,11 @@ sindex = 1
 mlmax = 8000
 
 # Filtering configuration
-glmaxes = [3000, 2000]
-lmaxes = [3000, 3000]
+glmaxes = [6000, 2000]
+lmaxes = [6000, 6000]
 lmin = 300
 beam_fwhm = 1.5
 noise_t = 10.
-
-## Get theory spectra
 
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, lmax=mlmax)
 ## Get normalizations
@@ -52,12 +50,13 @@ ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, lmax
 kells = np.arange(mlmax+1)
 sym_shape, sym_wcs = enmap.geometry(res=np.deg2rad(res/60.), pos=[0,0],
                                     shape=(2000,2000), proj="plain")
-sym_gnorms = [wl_recon.get_s_norms(ests,ucls,tcls,lmin,lmaxes[i],sym_shape,sym_wcs,GLMAX=glmaxes[i])
+sym_gnorms = [wl_recon.get_s_norms(ests,ucls,tcls,lmin,lmaxes[i],
+                                   sym_shape,sym_wcs,GLMAX=glmaxes[i]) 
               for i in range(len(lmaxes))]
 
 # LMIN = 1, LWIDTH (FOR BINNING) = 50
 #Als_temp = pytempura.get_norms(ests,ucls,tcls,lmin,lmax,k_ellmax=mlmax,no_corr=False)
-Als_sym = [wl_recon.s_norms_formatter(sym_gnorms[i],kells,sym_shape,sym_wcs,1,lmaxes[i],50)
+Als_sym = [wl_recon.s_norms_formatter_to_temp(sym_gnorms[i],kells,sym_shape,sym_wcs,1,lmaxes[i],50)
            for i in range(len(lmaxes))]
 
 ## Get lensed alms to cross correlate
@@ -109,8 +108,8 @@ for est in ests:
         pl2.add(*bin((cls-icls)/icls),marker='o')
         pl2.hline(y=0)
         pl2._ax.set_ylim(-0.1,0.05)
-        pl2.done(f'websky_gcut_recon_diff_{est}_{j}.png')
+        pl2.done(f'websky_gcut_test_recon_diff_{est}_{lmax}_{j}.png')
         #pl._ax.set_ylim(1e-9,1e-5)
-        pl.done(f'websky_gcut_recon_{est}_{j}.png')
+        pl.done(f'websky_gcut_test_recon_{est}_{lmax}_{j}.png')
 
 print("Time elapsed: %0.5f seconds" % (time.time() - t1))
