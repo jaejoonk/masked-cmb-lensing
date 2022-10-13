@@ -119,23 +119,28 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 def alms_inverse_filter(alms, lmin = LMIN, lmax = LMAX, 
                         beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad=True):
     ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
-    fTalm = utils.isotropic_filter(alms, tcls, lmin, lmax)
-    return ucls, tcls, fTalm[0]
+    falms = utils.isotropic_filter(alms, tcls, lmin, lmax)
+    return ucls, tcls, falms
 
 # run the quadratic estimator from falafel
 # first index regular alms, second index gradient alms
-def falafel_qe(ucls, fTalm, xfTalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION):
+def falafel_qe(ucls, falm, xfalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION):
     shape, wcs = enmap.fullsky_geometry(res=res)
     # create a pixelization object
     px = qe.pixelization(shape=shape, wcs=wcs)
+    print(len(falm))
+    if len(falm) != 3:
+       alms = [falm, falm*0., falm*0.,]
+       xalms = [None, None, None] if xfalm is None else [xfalm, xfalm*0., xfalm*0.]
+    else:
+       alms = falm
+       xalms = [None] * 3 if xfalm is None else xfalm 
+    
     # run the quadratic estimator using the theory ucls
     recon_alms = qe.qe_all(px, ucls, mlmax=mlmax,
-                           fTalm=fTalm, fEalm=fTalm*0., fBalm=fTalm*0.,
+                           fTalm=alms[0], fEalm=alms[1], fBalm=alms[2],
                            estimators=ests,
-                           xfTalm = xfTalm,
-                           xfEalm = (None if xfTalm is None else xfTalm*0.),
-                           xfBalm = (None if xfTalm is None else xfTalm*0.)
-                          )
+                           xfTalm=xalms[0], xfEalm=xalms[1], xfBalm=xalms[2])
     return recon_alms
 
 # get normalizations from tempura

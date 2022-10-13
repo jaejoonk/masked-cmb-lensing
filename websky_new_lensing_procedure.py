@@ -59,7 +59,7 @@ MIN_MASS = 6. # 1e14 solar masses
 MAX_MASS = 40. # 1e14 solar masses
 
 LMIN = 300
-LMAX = 3000
+LMAX = 6000
 GLMAX = 2000
 MLMAX = 6500
 BEAM_FWHM = 1.5 # arcmin
@@ -83,16 +83,16 @@ def full_procedure(debug=DEBUG):
     if debug:
         print("Opened kap file and created map. Total time elapsed: %0.5f seconds" % (time.time() - t1))
     
-    ucls, tcls, fTalm = josh_wlrecon.alms_inverse_filter(alms, lmin=LMIN, lmax=LMAX,
-                                                        beam_fwhm = BEAM_FWHM, noise_t = NOISE_T)
-    _, _, xfTalm      = josh_wlrecon.alms_inverse_filter(alms, lmin=LMIN, lmax=GLMAX,
-                                                        beam_fwhm = BEAM_FWHM, noise_t = NOISE_T)
+    ucls, tcls, falm    = josh_wlrecon.alms_inverse_filter(alms, lmin=LMIN, lmax=LMAX,
+                                                           beam_fwhm = BEAM_FWHM, noise_t = NOISE_T)
+    xucls, xtcls, xfalm = josh_wlrecon.alms_inverse_filter(alms, lmin=LMIN, lmax=GLMAX,
+                                                           beam_fwhm = BEAM_FWHM, noise_t = NOISE_T)
 
     if debug:
         print("Inverse filtered alms. Total time elapsed: %0.5f seconds" % (time.time() - t1))
     
-    recon_alms     = josh_wlrecon.falafel_qe(ucls, fTalm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
-    cut_recon_alms = josh_wlrecon.falafel_qe(ucls, fTalm, xfTalm=xfTalm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
+    recon_alms     = josh_wlrecon.falafel_qe(ucls, falm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
+    cut_recon_alms = josh_wlrecon.falafel_qe(xucls, falm, xfalm=xfalm, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
 
     if debug:
         print("Performed grad-cut + standard QE reconstruction. Total time elapsed: %0.5f seconds" % (time.time() - t1))
@@ -104,7 +104,7 @@ def full_procedure(debug=DEBUG):
 
     sym_shape, sym_wcs = enmap.geometry(res=SYM_RES, pos=[0,0], shape=SYM_SHAPE, proj='plain')
     s_norms =     josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs)
-    cut_s_norms = josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs,
+    cut_s_norms = josh_wlrecon.get_s_norms(ESTS, xucls, xtcls, LMIN, LMAX, sym_shape, sym_wcs,
                                            GLMIN=LMIN, GLMAX=GLMAX, grad_cut=True)
 
     kells = np.arange(Al_temp.shape[0])

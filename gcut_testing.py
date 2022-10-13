@@ -58,14 +58,14 @@ Als_sym = [wl_recon.s_norms_formatter_to_temp(sym_gnorms[i],kells,sym_shape,sym_
            for i in range(len(lmaxes))]
 
 ## Get lensed alms to cross correlate
-lensed_websky_alm = hp.read_alm(WEBSKY_ALM_LOC, hdu=(1,2,3))
+lensed_websky_alm = hp.read_alm(WEBSKY_ALM_LOC)
 kap_alm = hp.map2alm(hp.read_map(KAP_LOC))
 ikalm = utils.change_alm_lmax(kap_alm.astype(np.complex128), mlmax)
 
 ## Filter alms
-Xdats = [utils.isotropic_filter(lensed_websky_alm,tcls,lmin,lmax)
+Xdats = [utils.isotropic_filter([lensed_websky_alm,lensed_websky_alm*0.,lensed_websky_alm*0.],tcls,lmin,lmax)
          for lmax in lmaxes]
-gXdats = [utils.isotropic_filter(lensed_websky_alm,tcls,lmin,glmax)
+gXdats = [utils.isotropic_filter([lensed_websky_alm,lensed_websky_alm*0.,lensed_websky_alm*0.],tcls,lmin,glmax)
           for glmax in glmaxes]
 
 ## Reconstruct
@@ -106,8 +106,8 @@ for est in ests:
         pl2.add(*bin((cls-icls)/icls),marker='o')
         pl2.hline(y=0)
         pl2._ax.set_ylim(-0.1,0.05)
-        pl2.done(f'websky_gcut_test_recon_diff_{est}_{lmax}_{j}.png')
+        pl2.done(f'websky_gcut_filtertest_recon_diff_{est}_{lmax}_{j}.png')
         #pl._ax.set_ylim(1e-9,1e-5)
-        pl.done(f'websky_gcut_test_recon_{est}_{lmax}_{j}.png')
+        pl.done(f'websky_gcut_filtertest_recon_{est}_{lmax}_{j}.png')
 
 print("Time elapsed: %0.5f seconds" % (time.time() - t1))
