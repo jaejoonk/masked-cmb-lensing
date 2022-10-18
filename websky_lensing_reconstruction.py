@@ -11,6 +11,7 @@ from pixell.pointsrcs import radial_bin
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import sem
 
 import healpy as hp
 from healpy.fitsfunc import read_alm,read_map
@@ -128,7 +129,6 @@ def falafel_qe(ucls, falm, xfalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
     shape, wcs = enmap.fullsky_geometry(res=res)
     # create a pixelization object
     px = qe.pixelization(shape=shape, wcs=wcs)
-    print(len(falm))
     if len(falm) != 3:
        alms = [falm, falm*0., falm*0.,]
        xalms = [None, None, None] if xfalm is None else [xfalm, xfalm*0., xfalm*0.]
@@ -410,6 +410,22 @@ def gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
                                                   lowlim=lowlim, highlim=highlim)
     return ras, decs
 
+# create error bars from a full set of stampis
+def gen_rprofile_error_bars(imap, ras, decs, Ncoords=NCOORDS,
+                            radius=10*RESOLUTION, res=RESOLUTION,
+                            Nbins=20):
+      
+    stamps = josh_websky.stack_random_all(imap, ras, decs, Ncoords=NCOORDS,
+                                          radius=radius, res=res)
+
+    radius_bins = np.linspace(0, radius, Nbins)
+    radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
+    stamp_rbins = []
+    for stamp in stamps:
+        stamp_rbins.append(radial_avg_own(stamp, res, radius_bins))
+
+    stack_map, avg_map = josh_websky.stack_random_from_thumbs(stamps)
+    return radius_centers, sem(np.array(stamp_rbins)), stack_map, avg_map
 
 # Stacks the input maps for Ncoords # of random coordinates, and then plots the 
 # (by default) averaged stack. Returns the output stacked (or averaged) maps, 
@@ -417,15 +433,22 @@ def gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
 def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
                         output_filename="plot.png", radius=10*RESOLUTION,
                         res=RESOLUTION, figscale=16, fontsize=13,
-                        stacked_maps=False):
+                        error_bars=True, Nbins=20, stacked_maps=False):
     struct = []
     # check if random # of coordinates asked for exceeds # of data points
-    if len(ras) < Ncoords: Ncoords = len(ras) 
+    if len(ras) < Ncoords: Ncoords = len(ras)
+
+    if error_bars: struct_errors = [] 
     for imap in maps:
-        stacked_map, avg_map = josh_websky.stack_average_random(imap, ras, decs,
-                                                                Ncoords=Ncoords,
-                                                                radius=radius,
-                                                                res = res)
+        if error_bars:
+            rs, errs, stacked_map, avg_map = gen_rprofile_error_bars(imap, ras, decs, 
+                                             Ncoords=Ncoords, radius=radius, res=res, Nbins=Nbins)
+            struct_errors.append(errs)
+        else:
+            stacked_map, avg_map = josh_websky.stack_average_random(imap, ras, decs,
+                                                                    Ncoords=Ncoords,
+                                                                    radius=radius,
+                                                                    res = res)
         struct.append((stacked_map, avg_map))
     
     figscale_x = figscale * 3 // 4 * len(struct)
@@ -446,16 +469,18 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
     plt.savefig(output_filename)
     plt.clf()
 
-    return [elem[0 if stacked_maps else 1] for elem in struct]
+    if error_bars: return struct_errors, [elem[0 if stacked_maps else 1] for elem in struct]
+    else: return [elem[0 if stacked_maps else 1] for elem in struct]
+
 
 # Plots the binned radial profile for a bunch of maps centered at a signal, which
 # for a convergence map should be the kappa convergence value as a function of radians 
 # from the center. Returns kappa(radians) for each map, satisfying the same order as the input.
-def radial_profiles(signal_maps, labels=None, 
+def radial_profiles(signal_maps, error_bars=None, labels=None, 
                     output_filename="binned_radial_profiles.png",
-                    radius=10*RESOLUTION, res=RESOLUTION, Nbins = 20, figsize=10):
+                    radius=10*RESOLUTION, res=RESOLUTION, Nbins = 20,
+                    figsize=10, titleend=""):
 
-    
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
     binned_profiles = []
@@ -463,12 +488,14 @@ def radial_profiles(signal_maps, labels=None,
         binned_profiles.append(radial_avg_own(imap, res, radius_bins))
     
     plt.figure(figsize=(figsize, figsize))
-    plt.title("Average binned radial profiles (kappa map)")
+    plt.title("Average binned radial profiles (kappa map) %s" % titleend)
     plt.xlabel("arcmin")
     plt.ylabel("Kappa")
     for i in range(len(binned_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
-        plt.plot(radius_centers * (180./np.pi) * 60., binned_profiles[i], label=labeltext)
+        if error_bars is None: plt.plot(radius_centers * (180./np.pi) * 60., binned_profiles[i], label=labeltext)
+        else: plt.errorbar(radius_centers * (180./np.pi) * 60., binned_profiles[i],
+                           yerr=error_bars[i], label=labeltext)
     
     if labels is not None: plt.legend()
     plt.savefig(output_filename)
@@ -477,7 +504,7 @@ def radial_profiles(signal_maps, labels=None,
     return binned_profiles
 
 def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="binned_radial_profiles_ratio.png",
-                         radius=10*RESOLUTION, res=RESOLUTION, Nbins=20, figsize=10):
+                         radius=10*RESOLUTION, res=RESOLUTION, Nbins=20, figsize=10, titleend=""):
 
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
@@ -488,7 +515,7 @@ def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="b
         ratio_profiles.append((imap_profile - reference_profile) / reference_profile)
 
     plt.figure(figsize=(figsize, figsize))
-    plt.title("Difference in avg binned radial kappa profiles")
+    plt.title("Difference in avg binned radial kappa profiles %s" % titleend)
     plt.xlabel("arcmin")
     plt.ylabel(r'$(\kappa^{x} - \kappa^{WS kap.fits}) / \kappa^{WS kap.fits}$')
 

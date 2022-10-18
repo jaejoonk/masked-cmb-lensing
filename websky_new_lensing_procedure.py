@@ -29,6 +29,7 @@ import websky_stack_and_visualize as josh_websky
 import websky_lensing_reconstruction as josh_wlrecon
 # from gcut_simple import get_theory_dicts_white_noise_websky 
 
+import argparse
 ###############################################
 # constants
 ###############################################
@@ -40,9 +41,6 @@ KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
 HALOS_FILENAME = "$SCRATCH/halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
-OUTPUT_STACKS_FILENAME = "new-data-6to40-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = "new-kappa-6to40-binnedrprofiles.png"
-OUTPUT_RRPROFILE_FILENAME = "new-kappa-6to40-binnedrprofiles-diff.png"
 NCOORDS = 10000
 NBINS = 20
 LWIDTH = 50
@@ -55,16 +53,50 @@ SYM_SHAPE = (4000,4000)
 RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
-MIN_MASS = 6. # 1e14 solar masses
-MAX_MASS = 40. # 1e14 solar masses
+MIN_MASS = 1. # 1e14 solar masses
+MAX_MASS = 6. # 1e14 solar masses
+
+minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
 
 LMIN = 300
-LMAX = 6000
+LMAX = 3000
 GLMAX = 2000
 MLMAX = 6500
+
+OUTPUT_STACKS_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err.png"
+OUTPUT_RRPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff.png"
+
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']
+
+###############################################
+# Arguments
+###############################################
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--minmass", type=float, default=1., help="minimum mass of clusters to stack on (x 1e14)")
+parser.add_argument("--maxmass", type=float, default=40., help="maximum mass of clusters to stack on (x 1e14)")
+parser.add_argument("--lmin", type=int, default=300, help="minimum l multipole to reconstruct from")
+parser.add_argument("--lmax", type=int, default=6000, help="maximum l multipole to reconstruct from")
+parser.add_argument("--glmax", type=int, default=2000, help="gradient cut max l multipole")
+parser.add_argument("--res", type=float, default=0.5, help="resolution of maps (in arcmin)")
+parser.add_argument("--ncoords", type=int, default=5000, help="number of random clusters to stack on")
+parser.add_argument("--verbose", action="store_true", help="output debug / verbose text")
+args = parser.parse_args()
+
+if args.minmass: MIN_MASS = args.minmass
+if args.maxmass: MAX_MASS = args.maxmass
+if args.lmin: LMIN = args.lmin
+if args.lmax: LMAX = args.lmax
+if args.glmax: GLMAX = args.glmax
+if args.res:
+    RESOLUTION = np.deg2rad(args.res / 60.) 
+    STACK_RES = np.deg2rad(args.res / 60.)
+    SYM_RES = np.deg2rad(args.res / 60.)
+if args.ncoords: NCOORDS = args.ncoords
+if args.verbose: DEBUG = args.verbose
 
 ###############################################
 # Lensing reconstruction
@@ -104,7 +136,7 @@ def full_procedure(debug=DEBUG):
 
     sym_shape, sym_wcs = enmap.geometry(res=SYM_RES, pos=[0,0], shape=SYM_SHAPE, proj='plain')
     s_norms =     josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs)
-    cut_s_norms = josh_wlrecon.get_s_norms(ESTS, xucls, xtcls, LMIN, LMAX, sym_shape, sym_wcs,
+    cut_s_norms = josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs,
                                            GLMIN=LMIN, GLMAX=GLMAX, grad_cut=True)
 
     kells = np.arange(Al_temp.shape[0])
@@ -128,28 +160,33 @@ def full_procedure(debug=DEBUG):
 
     ras, decs = josh_wlrecon.gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
                                         lowlim=MIN_MASS, highlim=MAX_MASS)
-    avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map],
-                                                  ras, decs, 
-                                                  Ncoords = NCOORDS,
-                                                  labels=["Stack from falafel QE + symlens",
-                                                          "Stack from gradient cut falafel QE + symlens",
-                                                          "Stack from kap.fits"],
-                                                  output_filename = OUTPUT_STACKS_FILENAME)
-    
+    errs, avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map],
+                                                       ras, decs, Ncoords = NCOORDS,
+                                                       labels=["Stack from falafel QE + symlens",
+                                                               "Stack from gradient cut falafel QE + symlens",
+                                                               "Stack from kap.fits"],
+                                                       output_filename = OUTPUT_STACKS_FILENAME,
+                                                       radius=RADIUS, res=STACK_RES, error_bars=True,
+                                                       Nbins=NBINS)
+    print(errs) 
     if debug:
         print("Stacked and averaged kappa maps, saved to %s.\nTotal time elapsed: %0.5f seconds" % (OUTPUT_STACKS_FILENAME,
                                                                                                     time.time() - t1))
 
-    profiles = josh_wlrecon.radial_profiles(avgd_maps, labels=["symlens + sQE",
+    profiles = josh_wlrecon.radial_profiles(avgd_maps, error_bars=errs, labels=["symlens + sQE",
                                             "grad. cut symlens + sQE", "kap.fits"], 
                                             output_filename=OUTPUT_RPROFILE_FILENAME,
-                                            radius=RADIUS, res=STACK_RES, Nbins = NBINS)
+                                            radius=RADIUS, res=STACK_RES, Nbins = NBINS,
+                                            titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
     profiles2 = josh_wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], labels=["symlens + sQE", "grad. cut symlens + sQE"],
                                                   output_filename=OUTPUT_RRPROFILE_FILENAME,
-                                                  radius=RADIUS, res=STACK_RES, Nbins=NBINS)
+                                                  radius=RADIUS, res=STACK_RES, Nbins=NBINS,
+                                                  titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
+
+    t2 = time.time()
     if debug:
-        print("Plotted radial profiles, saved to %s.\nTotal time elapsed: %0.5f seconds" % (OUTPUT_RPROFILE_FILENAME,
-                                                                                            time.time() - t1))       
+        print("Plotted radial profiles, saved to %s.\nTotal time elapsed: %0.5f seconds | %0.5f minutes" \
+              % (OUTPUT_RPROFILE_FILENAME, t2 - t1, (t2 - t1) / 60.)       
     print("** COMPLETE! **")      
                 
 

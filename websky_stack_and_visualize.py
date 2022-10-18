@@ -171,6 +171,18 @@ def stack_average_random(imap, ra, dec, Ncoords=NCOORDS,
 
     return stack_map, avg_map
 
+def stack_random_all(imap, ra, dec, Ncoords=NCOORDS,
+                     radius=RAD, res=RESOLUTION):
+    idx_random = np.random.choice(len(ra), Ncoords, replace=False)
+    coords = np.array([[dec[i], ra[i]] for i in idx_random])
+
+    thumbs = thumbnails(imap, coords, r=radius, res=res)
+    return thumbs
+
+def stack_random_from_thumbs(thumbs):
+    stack = sum([thumbs[i] for i in range(len(thumbs))])
+    return stack, stack / len(thumbs)
+
 # stack and average on the first N coordinates
 # output stack, average maps
 def stack_average_firstn(imap, ra, dec, Ncoords=NCOORDS,
