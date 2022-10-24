@@ -488,16 +488,16 @@ def radial_profiles(signal_maps, error_bars=None, labels=None,
         binned_profiles.append(radial_avg_own(imap, res, radius_bins))
     
     plt.figure(figsize=(figsize, figsize))
-    plt.title("Average binned radial profiles (kappa map) %s" % titleend)
-    plt.xlabel("arcmin")
-    plt.ylabel("Kappa")
+    plt.title("Binned (+ stacked) radial profiles of kappa\n%s" % titleend, fontsize=20)
+    plt.xlabel("arcmin", fontsize=16)
+    plt.ylabel(r"$\kappa$", fontsize=16)
     for i in range(len(binned_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
         if error_bars is None: plt.plot(radius_centers * (180./np.pi) * 60., binned_profiles[i], label=labeltext)
         else: plt.errorbar(radius_centers * (180./np.pi) * 60., binned_profiles[i],
                            yerr=error_bars[i], label=labeltext)
     
-    if labels is not None: plt.legend()
+    if labels is not None: plt.legend(fontsize=12)
     plt.savefig(output_filename)
     plt.clf()
 

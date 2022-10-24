@@ -56,16 +56,10 @@ RHO = 2.775e11 * OMEGAM_H2
 MIN_MASS = 1. # 1e14 solar masses
 MAX_MASS = 6. # 1e14 solar masses
 
-minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
-
 LMIN = 300
 LMAX = 3000
 GLMAX = 2000
 MLMAX = 6500
-
-OUTPUT_STACKS_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err.png"
-OUTPUT_RRPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff.png"
 
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
@@ -86,17 +80,35 @@ parser.add_argument("--ncoords", type=int, default=5000, help="number of random 
 parser.add_argument("--verbose", action="store_true", help="output debug / verbose text")
 args = parser.parse_args()
 
-if args.minmass: MIN_MASS = args.minmass
-if args.maxmass: MAX_MASS = args.maxmass
-if args.lmin: LMIN = args.lmin
-if args.lmax: LMAX = args.lmax
-if args.glmax: GLMAX = args.glmax
+if args.minmass:
+    MIN_MASS = args.minmass
+    print(f"Minimum mass set to {MIN_MASS}e14 M_sun.")
+if args.maxmass: 
+    MAX_MASS = args.maxmass
+    print(f"Maximum mass set to {MAX_MASS}e14 M_sun.")
+if args.lmin:
+    LMIN = args.lmin
+    print(f"lmin set to {LMIN}.")
+if args.lmax:
+    LMAX = args.lmax
+    print(f"lmax set to {LMAX}.")
+if args.glmax:
+    GLMAX = args.glmax
+    print(f"glmax set to {GLMAX}.")
 if args.res:
     RESOLUTION = np.deg2rad(args.res / 60.) 
     STACK_RES = np.deg2rad(args.res / 60.)
     SYM_RES = np.deg2rad(args.res / 60.)
-if args.ncoords: NCOORDS = args.ncoords
+    print(f"resolution set to {args.res} arcmin.")
+if args.ncoords:
+    NCOORDS = args.ncoords
+    print(f"N_coords set to {NCOORDS}.")
 if args.verbose: DEBUG = args.verbose
+
+minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
+OUTPUT_STACKS_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err.png"
+OUTPUT_RRPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff.png"
 
 ###############################################
 # Lensing reconstruction
@@ -177,16 +189,16 @@ def full_procedure(debug=DEBUG):
                                             "grad. cut symlens + sQE", "kap.fits"], 
                                             output_filename=OUTPUT_RPROFILE_FILENAME,
                                             radius=RADIUS, res=STACK_RES, Nbins = NBINS,
-                                            titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
+                                            titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS*1e14:.2e} ~ {MAX_MASS*1e14:.2e} M_sun)")
     profiles2 = josh_wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], labels=["symlens + sQE", "grad. cut symlens + sQE"],
                                                   output_filename=OUTPUT_RRPROFILE_FILENAME,
                                                   radius=RADIUS, res=STACK_RES, Nbins=NBINS,
-                                                  titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
+                                                  titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS*1e14:.2e} ~ {MAX_MASS*1e14:.2e} M_sun)")
 
     t2 = time.time()
     if debug:
         print("Plotted radial profiles, saved to %s.\nTotal time elapsed: %0.5f seconds | %0.5f minutes" \
-              % (OUTPUT_RPROFILE_FILENAME, t2 - t1, (t2 - t1) / 60.)       
+              % (OUTPUT_RPROFILE_FILENAME, t2 - t1, (t2 - t1) / 60.))       
     print("** COMPLETE! **")      
                 
 

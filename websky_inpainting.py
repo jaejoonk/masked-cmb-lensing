@@ -44,12 +44,15 @@ NOISE_T = 10. # muK arcmin
 LMAX = 6000
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, lmax=LMAX) 
 THEORY_FN = lambda s,ells: np.array(ucls[s])[ells]
-# probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
+## probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
 
 pixcov.inpaint_uncorrelated_save_geometries(coords, HOLE_RADIUS, IVAR, OUTPUT_DIR,
                                             theory_fn=THEORY_FN, beam_fn=BEAM_FN,
                                             pol=False, comm=mpi.fakeMpiComm())
+
+## reconvolve beam?
+lensed_map = cs.alm2map(cs.almxfl(cs.map2alm(lensed_map, lmax=lmax), BEAM_FN(np.arange(lmax+1)))) 
 
 inpainted_map = pixcov.inpaint_uncorrelated_from_saved_geometries(lensed_map, OUTPUT_DIR)
 
