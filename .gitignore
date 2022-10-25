@@ -1,0 +1,6 @@
+websky/
+images/
+miscdata/
+inpaint_geos/
+*.fits
+*.txt
