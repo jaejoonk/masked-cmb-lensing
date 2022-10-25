@@ -1,10 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 
-from orphics import maps, cosmology, io, pixcov, mpi
+from orphics import maps, cosmology, io, pixcov, mpi, stats
 from falafel import qe, utils as futils
 from pixell import enmap, curvedsky as cs, lensing as plensing
 import healpy as hp
+import pytempura
+from mpi4py import MPI
 
 import websky_lensing_reconstruction as josh_wlrecon
 import websky_stack_and_visualize as josh_wstack
@@ -14,6 +17,8 @@ import time
 
 ESTS = ['TT']
 RESOLUTION = np.deg2rad(1.0/60.)
+COMM = MPI.COMM_WORLD
+rank = COMM.Get_rank() 
 
 t1 = time.time()
 
@@ -43,40 +48,51 @@ BEAM_SIG = BEAM_FWHM / (8 * np.log(2))**0.5
 NOISE_T = 10. # muK arcmin
 LMAX = 6000
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, lmax=LMAX) 
-THEORY_FN = lambda s,ells: np.array(ucls[s])[ells]
+THEORY_FN = cosmology.default_theory().lCl
 ## probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
 
 pixcov.inpaint_uncorrelated_save_geometries(coords, HOLE_RADIUS, IVAR, OUTPUT_DIR,
                                             theory_fn=THEORY_FN, beam_fn=BEAM_FN,
-                                            pol=False, comm=mpi.fakeMpiComm())
+                                            pol=False, comm=COMM)
 
 ## reconvolve beam?
-lensed_map = cs.alm2map(cs.almxfl(cs.map2alm(lensed_map, lmax=lmax), BEAM_FN(np.arange(lmax+1)))) 
+shape, wcs = enmap.fullsky_geometry(res=RESOLUTION)
+omap = enmap.empty(shape, wcs, dtype=np.float32)
+lensed_map = cs.alm2map(cs.almxfl(cs.map2alm(lensed_map, lmax=LMAX), 
+                                  BEAM_FN(np.arange(LMAX+1))),
+                        omap) 
 
 inpainted_map = pixcov.inpaint_uncorrelated_from_saved_geometries(lensed_map, OUTPUT_DIR)
+
+# don't need parallel processes anymore?
+if rank != 0: exit()
+
+# SAVE MAP
+enmap.write_map(f"inpainted_map_{MIN_MASS:.1f}_to_{MAX_MASS:.1f}.fits", inpainted_map, fmt="fits")
 
 # try reconstructing?
 print("recon time")
 LMIN = 300
 MLMAX = 8000
 
-lensed_alm = cs.map2alm(lensed_map, lmax=lmax) 
-inpainted_alm = cs.map2alm(inpainted_map, lmax=lmax)
+lensed_alm = cs.map2alm(lensed_map, lmax=LMAX) 
+inpainted_alm = cs.map2alm(inpainted_map, lmax=LMAX)
 
-Xdats = futils.isotropic_filter([lensed_alm, lensed_alm*0., lensed_alm*0.], lmin=LMIN, lmax=LMAX)
-iXdats = futils.isotropic_filter([inpainted_alm, inpainted_alm*0., inpainted_alm*0.], lmin=LMIN, lmax=LMAX)
+Xdats = futils.isotropic_filter([lensed_alm, lensed_alm*0., lensed_alm*0.], tcls, lmin=LMIN, lmax=LMAX)
+iXdats = futils.isotropic_filter([inpainted_alm, inpainted_alm*0., inpainted_alm*0.], tcls, lmin=LMIN, lmax=LMAX)
 
 recon_alms = josh_wlrecon.falafel_qe(ucls, Xdats, mlmax=MLMAX, ests=ESTS, res=RESOLUTION) 
 irecon_alms = josh_wlrecon.falafel_qe(ucls, iXdats, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
 
 # normalize using tempura
-Al = josh_wlrecon.tempura_norm(ESTS, ucls, tcls, lmin=LMIN, lmax=LMAX)
+Al = pytempura.get_norms(ESTS,ucls,tcls,LMIN,LMAX,k_ellmax=MLMAX,no_corr=False)
 
 # plot cross spectra vs auto spectra?
 print("plotting time")
-ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_LOC)), mlmax)
-kalms = {}
+ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
+norm_recon_alms = {}
+norm_irecon_alms = {}
 icls = hp.alm2cl(ikalm,ikalm)
 ells = np.arange(len(icls))
 
@@ -84,7 +100,7 @@ bin_edges = np.geomspace(2,MLMAX,15)
 binner = stats.bin1D(bin_edges)
 bin = lambda x: binner.bin(ells,x)
 
-for est in ests:
+for est in ESTS:
     pl = io.Plotter('CL')
     pl2 = io.Plotter('rCL',xyscale='loglin')
     
@@ -104,7 +120,7 @@ for est in ests:
     pl.add(ells,ixicls,label='inpaint x inpaint')
 
     pl2.add(*bin((ixicls-rxicls)/rxicls),marker='o')
-    pl2._ax.set_ylabel(r'$(\Kappa_{inp x inp} - \Kappa_{rec x inp}) / \Kappa_{rec x inp}')
+    pl2._ax.set_ylabel(r'$(\kappa_{inp x inp} - \kappa_{rec x inp}) / \kappa_{rec x inp}$')
     pl2.hline(y=0)
     #pl2._ax.set_ylim(-0.1,0.1)
     pl2.done(f'inpaint_recon_diff_{est}.png')
