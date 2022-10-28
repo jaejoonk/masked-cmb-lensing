@@ -120,7 +120,7 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 def alms_inverse_filter(alms, lmin = LMIN, lmax = LMAX, 
                         beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad=True):
     ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
-    falms = utils.isotropic_filter(alms, tcls, lmin, lmax)
+    falms = utils.isotropic_filter(alms if alms.shape[0] == 3 else [alms, alms*0., alms*0.], tcls, lmin, lmax)
     return ucls, tcls, falms
 
 # run the quadratic estimator from falafel
@@ -243,6 +243,29 @@ def stack_recon_maps(kappa_map, kapfile_map,
 
     plt.tight_layout()
     plt.savefig(output_filename)
+
+# plot inpainted vs lensed alm maps
+def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords, 
+                          radius=10*RESOLUTION, res=RESOLUTION):
+    inp_thumbnails = thumbnails(inpainted_map, coords, r=radius, res=res)
+    len_thumbnails = thumbnails(lensed_map, coords, r=radius, res=res)
+
+    for i in range(len(coords)):
+        [dec, ra] = coords[i]
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8,12), dpi=80)
+        
+        im1 = axes[0].imshow(inp_thumbnails[i], cmap='jet')
+        axes[0].set_title(f"Inpainted map at (ra={ra:.3f}, dec={dec:.3f})")
+        im2 = axes[1].imshow(len_thumbnails[i], cmap='jet')
+        axes[1].set_title(f"Lensed map at (ra={ra:.3f}, dec={dec:.3f})")
+
+        fig.subplots_adjust(right=0.85)
+        fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
+        fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
+        
+        plt.tight_layout()
+        plt.savefig(f"lensed_vs_inpaint_map_{i}.png")
+        plt.clf()
 
 # symlens normalization
 

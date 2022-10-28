@@ -37,6 +37,7 @@ DEBUG = True
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "websky/kap.fits"
 #KSZ_FILENAME = "websky/ksz.fits"
+MAP_FILENAME = "inpainted_map_2.0_to_10.0.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
 HALOS_FILENAME = "$SCRATCH/halos.pksc"
 COORDS_FILENAME = "output_halos.txt"

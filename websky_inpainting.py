@@ -34,9 +34,17 @@ MAX_MASS = 10.0 # 1e14
 COORDS_FILENAME = "output_halos.txt"
 COORDS = 1000
 
-ra, dec = josh_wstack.read_coords_from_file(COORDS_FILENAME, lowlim=MIN_MASS, highlim=MAX_MASS)
-indices = np.random.choice(len(ra), COORDS, replace=False)
-coords = np.array([[dec[i], ra[i]] for i in indices]) 
+if rank == 0:
+    ra, dec = josh_wstack.read_coords_from_file(COORDS_FILENAME, lowlim=MIN_MASS, highlim=MAX_MASS)
+    indices = np.random.choice(len(ra), COORDS, replace=False)
+    coords = np.array([[dec[i], ra[i]] for i in indices]) 
+
+    np.savetxt("random-coords.txt", coords) 
+else:
+    coords = None
+
+coords = COMM.bcast(coords, root=0)
+
 
 # inpainting time
 print("inpainting time")
@@ -103,28 +111,38 @@ bin = lambda x: binner.bin(ells,x)
 for est in ESTS:
     pl = io.Plotter('CL')
     pl2 = io.Plotter('rCL',xyscale='loglin')
+    pl3 = io.Plotter('CL')
     
     norm_recon_alms[est] = plensing.phi_to_kappa(hp.almxfl(recon_alms[est][0].astype(np.complex128), Al[est][0]))
     norm_irecon_alms[est] = plensing.phi_to_kappa(hp.almxfl(irecon_alms[est][0].astype(np.complex128), Al[est][0]))
 
-    ixicls = hp.alm2cl(norm_irecon_alms[est], norm_irecon_alms[est])
-    rxicls = hp.alm2cl(norm_irecon_alms[est], norm_recon_alms[est])
-    rxrcls = hp.alm2cl(norm_recon_alms[est], norm_recon_alms[est])
-    rcls = hp.alm2cl(norm_recon_alms[est], ikalm)
-    
+    inpcls = hp.alm2cl(norm_irecon_alms[est], norm_irecon_alms[est])
+    rcls = hp.alm2cl(norm_recon_alms[est], norm_recon_alms[est])
+
+    rxinp_cls = hp.alm2cl(norm_irecon_alms[est], norm_recon_alms[est])
+    rxi_cls = hp.alm2cl(norm_recon_alms[est], ikalm)
+    ixinp_cls = hp.alm2cl(ikalm, norm_irecon_alms[est])
+   
     pl.add(ells,(ells*(ells+1.)/2.)**2. * Al[est][0],ls='--', label="noise PS (per mode)")
     pl.add(ells,icls,label='input x input')
-    pl.add(ells,rcls,label='recon x input')
-    pl.add(ells,rxrcls,label='recon x recon')
-    pl.add(ells,rxicls,label='recon x inpaint')
-    pl.add(ells,ixicls,label='inpaint x inpaint')
+    pl.add(ells,rxi_cls,label='recon x input')
+    pl.add(ells,rcls,label='recon x recon')
+    pl.add(ells,rxinp_cls,label='recon x inpaint')
+    #pl.add(ells,ixicls,label='inpaint x inpaint')
 
-    pl2.add(*bin((ixicls-rxicls)/rxicls),marker='o')
-    pl2._ax.set_ylabel(r'$(\kappa_{inp x inp} - \kappa_{rec x inp}) / \kappa_{rec x inp}$')
+    pl3.add(ells,(ells*(ells+1.)/2.)**2. * Al[est][0],ls='--', label="noise PS (per mode)")
+    pl3.add(ells,icls,label='input x input')
+    pl3.add(ells,ixinp_cls,label='input x inpaint')
+    pl3.add(ells,inpcls,label='inpaint x inpaint')
+    pl3.add(ells,rxinp_cls,label='recon x inpaint')
+
+    pl2.add(*bin((ixinp_cls-icls)/icls),marker='o')
+    pl2._ax.set_ylabel(r'$(\kappa_{rec x i} - \kappa_{i x i}) / \kappa_{i x i}$')
     pl2.hline(y=0)
     #pl2._ax.set_ylim(-0.1,0.1)
-    pl2.done(f'inpaint_recon_diff_{est}.png')
+    pl2.done(f'inpaint_ixrec_vs_ixi_recon_diff_{est}.png')
     #pl._ax.set_ylim(1e-9,1e-5)
-    pl.done(f'inpaint_recon_{est}.png')
+    pl.done(f'inpaint_recon_x_input_{est}.png')
+    pl3.done(f'inpaint_inpaint_x_input_{est}.png')
 
 print("time elapsed: %0.5f seconds" % (time.time() - t1))
