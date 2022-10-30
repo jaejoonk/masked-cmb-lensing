@@ -438,7 +438,7 @@ def gen_rprofile_error_bars(imap, ras, decs, Ncoords=NCOORDS,
                             radius=10*RESOLUTION, res=RESOLUTION,
                             Nbins=20):
       
-    stamps = josh_websky.stack_random_all(imap, ras, decs, Ncoords=NCOORDS,
+    stamps = josh_websky.stack_random_all(imap, ras, decs, Ncoords=Ncoords,
                                           radius=radius, res=res)
 
     radius_bins = np.linspace(0, radius, Nbins)

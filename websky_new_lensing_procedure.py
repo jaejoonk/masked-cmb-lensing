@@ -130,7 +130,7 @@ def full_procedure(debug=DEBUG):
     t1 = time.time()
 
     if args.asmap:
-        alms = utils.change_alm_lmax(cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=LMAX), lmax=MLMAX)
+        alms = utils.change_alm_lmax(cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX), lmax=MLMAX)
     else: alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
                                        lmax=MLMAX)
            
@@ -189,7 +189,7 @@ def full_procedure(debug=DEBUG):
     else: ras, decs = josh_wlrecon.gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
                                               lowlim=MIN_MASS, highlim=MAX_MASS)
    
-    print(NCOORDS)
+    #print(NCOORDS)
     errs, avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map],
                                                        ras, decs, Ncoords = NCOORDS,
                                                        labels=["Stack from falafel QE + symlens",
