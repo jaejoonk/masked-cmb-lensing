@@ -68,7 +68,6 @@ pixcov.inpaint_uncorrelated_save_geometries(coords, HOLE_RADIUS, IVAR, OUTPUT_DI
                                             theory_fn=THEORY_FN, beam_fn=BEAM_FN,
                                             pol=False, comm=COMM)
 
-
 ## reconvolve beam?
 lensed_map = josh_wlrecon.almfile_to_map(alm_filename=ALM_FILENAME, res=RESOLUTION)
 lensed_alms_plus_beam = cs.almxfl(cs.map2alm(lensed_map, lmax=LMAX), BEAM_FN(np.arange(LMAX+1)))
