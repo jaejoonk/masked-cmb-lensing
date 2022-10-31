@@ -16,7 +16,7 @@ import cmb_ps
 import time
 
 ESTS = ['TT']
-RESOLUTION = np.deg2rad(1.0/60.)
+RESOLUTION = np.deg2rad(0.5/60.)
 COMM = MPI.COMM_WORLD
 rank = COMM.Get_rank() 
 
@@ -25,19 +25,18 @@ t1 = time.time()
 # let's convert our lensed alms to a map
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-lensed_map = josh_wlrecon.almfile_to_map(alm_filename=ALM_FILENAME, res=RESOLUTION)
 
 # generate coords
-print("generate coords")
-MIN_MASS = 2.0 # 1e14
-MAX_MASS = 10.0 # 1e14
+if rank == 0: print("generate coords")
+MIN_MASS = 3.0 # 1e14
+MAX_MASS = 20.0 # 1e14
 COORDS_FILENAME = "output_halos.txt"
-COORDS = 1000
+COORDS = 100
 
 if rank == 0:
     ra, dec = josh_wstack.read_coords_from_file(COORDS_FILENAME, lowlim=MIN_MASS, highlim=MAX_MASS)
     indices = np.random.choice(len(ra), COORDS, replace=False)
-    coords = np.array([[dec[i], ra[i]] for i in indices]) 
+    coords = np.array([[dec[i], ra[i]] for i in range(COORDS)]) 
 
     np.savetxt("random-coords.txt", coords) 
 else:
@@ -47,15 +46,20 @@ coords = COMM.bcast(coords, root=0)
 
 
 # inpainting time
-print("inpainting time")
+if rank == 0:
+    print("inpainting time")
+
+shape, wcs = enmap.fullsky_geometry(res=RESOLUTION)
+omap = enmap.empty(shape, wcs, dtype=np.float32)
+# print(omap.shape)
+
 HOLE_RADIUS = np.deg2rad(6.0/60.)
-IVAR = lensed_map * 0. + 1.
+IVAR = omap * 0. + 1.
 OUTPUT_DIR = "inpaint_geos/"
 BEAM_FWHM = 1.5 # arcmin
 BEAM_SIG = BEAM_FWHM / (8 * np.log(2))**0.5 
 NOISE_T = 10. # muK arcmin
 LMAX = 6000
-ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, lmax=LMAX) 
 THEORY_FN = cosmology.default_theory().lCl
 ## probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
@@ -64,20 +68,25 @@ pixcov.inpaint_uncorrelated_save_geometries(coords, HOLE_RADIUS, IVAR, OUTPUT_DI
                                             theory_fn=THEORY_FN, beam_fn=BEAM_FN,
                                             pol=False, comm=COMM)
 
+
 ## reconvolve beam?
-shape, wcs = enmap.fullsky_geometry(res=RESOLUTION)
-omap = enmap.empty(shape, wcs, dtype=np.float32)
-lensed_map = cs.alm2map(cs.almxfl(cs.map2alm(lensed_map, lmax=LMAX), 
-                                  BEAM_FN(np.arange(LMAX+1))),
-                        omap) 
+lensed_map = josh_wlrecon.almfile_to_map(alm_filename=ALM_FILENAME, res=RESOLUTION)
+lensed_alms_plus_beam = cs.almxfl(cs.map2alm(lensed_map, lmax=LMAX), BEAM_FN(np.arange(LMAX+1)))
+lensed_map = cs.alm2map(lensed_alms_plus_beam, omap) 
 
 inpainted_map = pixcov.inpaint_uncorrelated_from_saved_geometries(lensed_map, OUTPUT_DIR)
 
 # don't need parallel processes anymore?
 if rank != 0: exit()
 
-# SAVE MAP
+## deconvolve beam
+INV_BEAM_FN = lambda ells: 1./maps.gauss_beam(ells, BEAM_FWHM)
+inpainted_alm = cs.almxfl(cs.map2alm(inpainted_map, lmax=LMAX), INV_BEAM_FN)
+inpainted_map = cs.alm2map(inpainted_alm, omap) 
+
+# SAVE MAP + alms
 enmap.write_map(f"inpainted_map_{MIN_MASS:.1f}_to_{MAX_MASS:.1f}.fits", inpainted_map, fmt="fits")
+np.savetxt(f"inpainted_alms_{MIN_MASS:.1f}_to_{MAX_MASS:.1f}.txt", lensed_alms_plus_beam)
 
 # try reconstructing?
 print("recon time")
@@ -85,7 +94,7 @@ LMIN = 300
 MLMAX = 8000
 
 lensed_alm = cs.map2alm(lensed_map, lmax=LMAX) 
-inpainted_alm = cs.map2alm(inpainted_map, lmax=LMAX)
+ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, lmax=LMAX)
 
 Xdats = futils.isotropic_filter([lensed_alm, lensed_alm*0., lensed_alm*0.], tcls, lmin=LMIN, lmax=LMAX)
 iXdats = futils.isotropic_filter([inpainted_alm, inpainted_alm*0., inpainted_alm*0.], tcls, lmin=LMIN, lmax=LMAX)

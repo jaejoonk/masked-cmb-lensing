@@ -39,7 +39,7 @@ PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "websky/kap.fits"
 #KSZ_FILENAME = "websky/ksz.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = "inpainted_map_2.0_to_10.0.fits"
+MAP_FILENAME = "inpainted_map_3.0_to_20.0.fits"
 HALOS_FILENAME = "$SCRATCH/halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
@@ -130,7 +130,7 @@ def full_procedure(debug=DEBUG):
     t1 = time.time()
 
     if args.asmap:
-        alms = utils.change_alm_lmax(cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX), lmax=MLMAX)
+        alms = cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX)
     else: alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
                                        lmax=MLMAX)
            
