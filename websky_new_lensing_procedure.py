@@ -3,7 +3,7 @@
 ###############################################
 import time, os
 
-from pixell import enmap,utils as putils,reproject,enplot,curvedsky as cs
+from pixell import enmap,utils as putils,reproject,enplot
 from pixell.lensing import phi_to_kappa
 from pixell.reproject import healpix2map,thumbnails
 from pixell.curvedsky import alm2map,map2alm,almxfl
@@ -39,17 +39,15 @@ PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "websky/kap.fits"
 #KSZ_FILENAME = "websky/ksz.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = "inpainted_map_3.0_to_20.0.fits"
 HALOS_FILENAME = "$SCRATCH/halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
-OTHER_COORDS = None
 NBINS = 20
 LWIDTH = 50
 
 RESOLUTION = np.deg2rad(0.5 / 60.)
 STACK_RES = np.deg2rad(0.5 / 60.)
-RADIUS = STACK_RES * 10. # 10 arcmin
+RADIUS = STACK_RES * 15. # 7.5 arcmin
 SYM_RES = np.deg2rad(0.5 / 60.)
 SYM_SHAPE = (4000,4000)
 RAD = np.deg2rad(0.5)
@@ -58,10 +56,16 @@ RHO = 2.775e11 * OMEGAM_H2
 MIN_MASS = 1. # 1e14 solar masses
 MAX_MASS = 6. # 1e14 solar masses
 
+minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
+
 LMIN = 300
-LMAX = 6000
+LMAX = 3000
 GLMAX = 2000
 MLMAX = 6500
+
+OUTPUT_STACKS_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks.png"
+OUTPUT_RPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err.png"
+OUTPUT_RRPROFILE_FILENAME = f"data-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff.png"
 
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
@@ -79,48 +83,20 @@ parser.add_argument("--lmax", type=int, default=6000, help="maximum l multipole 
 parser.add_argument("--glmax", type=int, default=2000, help="gradient cut max l multipole")
 parser.add_argument("--res", type=float, default=0.5, help="resolution of maps (in arcmin)")
 parser.add_argument("--ncoords", type=int, default=5000, help="number of random clusters to stack on")
-parser.add_argument("--coords", type=str, default="", help="coords file")
-parser.add_argument("--asmap", action="store_true", help="if input alms are provided as a map")
 parser.add_argument("--verbose", action="store_true", help="output debug / verbose text")
 args = parser.parse_args()
 
-if args.minmass:
-    MIN_MASS = args.minmass
-    print(f"Minimum mass set to {MIN_MASS}e14 M_sun.")
-if args.maxmass: 
-    MAX_MASS = args.maxmass
-    print(f"Maximum mass set to {MAX_MASS}e14 M_sun.")
-if args.lmin:
-    LMIN = args.lmin
-    print(f"lmin set to {LMIN}.")
-if args.lmax:
-    LMAX = args.lmax
-    print(f"lmax set to {LMAX}.")
-if args.glmax:
-    GLMAX = args.glmax
-    print(f"glmax set to {GLMAX}.")
+if args.minmass: MIN_MASS = args.minmass
+if args.maxmass: MAX_MASS = args.maxmass
+if args.lmin: LMIN = args.lmin
+if args.lmax: LMAX = args.lmax
+if args.glmax: GLMAX = args.glmax
 if args.res:
     RESOLUTION = np.deg2rad(args.res / 60.) 
     STACK_RES = np.deg2rad(args.res / 60.)
     SYM_RES = np.deg2rad(args.res / 60.)
-    print(f"resolution set to {args.res} arcmin.")
-if args.ncoords:
-    NCOORDS = args.ncoords
-    print(f"N_coords set to {NCOORDS}.")
-if args.coords:
-    OTHER_COORDS = np.loadtxt(args.coords)
-    print(f"Coords file set to {args.coords}")
-    if NCOORDS > len(OTHER_COORDS[:,0]):
-        NCOORDS = len(OTHER_COORDS[:,0])
-        print(f"Not enough coordinates in provided data file, so N_coords changed to {NCOORDS}.")
-
+if args.ncoords: NCOORDS = args.ncoords
 if args.verbose: DEBUG = args.verbose
-
-
-minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
-OUTPUT_STACKS_FILENAME = f"data-inpaint-kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks.png"
-OUTPUT_RPROFILE_FILENAME = f"data-inpaint-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err.png"
-OUTPUT_RRPROFILE_FILENAME = f"data-inpaint-kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff.png"
 
 ###############################################
 # Lensing reconstruction
@@ -129,11 +105,9 @@ OUTPUT_RRPROFILE_FILENAME = f"data-inpaint-kappa-{minstr}to{maxstr}-{LMAX}-rbin-
 def full_procedure(debug=DEBUG):
     t1 = time.time()
 
-    if args.asmap:
-        alms = cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX)
-    else: alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
-                                       lmax=MLMAX)
-           
+    alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
+                                 lmax=MLMAX)
+            
     kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, lmax=LMAX,
                                           res=RESOLUTION)
     kap_map = kap_map - kap_map.mean()
@@ -184,21 +158,17 @@ def full_procedure(debug=DEBUG):
     if debug:
         print("Created kappa maps for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
 
-    if args.coords:
-        decs, ras = OTHER_COORDS[:,0], OTHER_COORDS[:,1]
-    else: ras, decs = josh_wlrecon.gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
-                                              lowlim=MIN_MASS, highlim=MAX_MASS)
-   
-    #print(NCOORDS)
+    ras, decs = josh_wlrecon.gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
+                                        lowlim=MIN_MASS, highlim=MAX_MASS)
     errs, avgd_maps = josh_wlrecon.stack_and_plot_maps([symlens_map, cut_symlens_map, kap_map],
-                                                       ras, decs, Ncoords = NCOORDS,
-                                                       labels=["Stack from falafel QE + symlens",
-                                                               "Stack from gradient cut falafel QE + symlens",
-                                                               "Stack from kap.fits"],
-                                                       output_filename = OUTPUT_STACKS_FILENAME,
-                                                       radius=RADIUS, res=STACK_RES, error_bars=True,
-                                                       Nbins=NBINS)
-    #print(errs) 
+                                                        ras, decs, Ncoords = NCOORDS,
+                                                        labels=["Stack from falafel QE + symlens",
+                                                                "Stack from gradient cut falafel QE + symlens",
+                                                                "Stack from kap.fits"],
+                                                        output_filename = OUTPUT_STACKS_FILENAME,
+                                                        radius=RADIUS, res=STACK_RES, error_bars=True,
+                                                        Nbins=NBINS)
+    # print(errs) 
     if debug:
         print("Stacked and averaged kappa maps, saved to %s.\nTotal time elapsed: %0.5f seconds" % (OUTPUT_STACKS_FILENAME,
                                                                                                     time.time() - t1))
@@ -207,16 +177,16 @@ def full_procedure(debug=DEBUG):
                                             "grad. cut symlens + sQE", "kap.fits"], 
                                             output_filename=OUTPUT_RPROFILE_FILENAME,
                                             radius=RADIUS, res=STACK_RES, Nbins = NBINS,
-                                            titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS*1e14:.2e} ~ {MAX_MASS*1e14:.2e} M_sun)")
+                                            titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
     profiles2 = josh_wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], labels=["symlens + sQE", "grad. cut symlens + sQE"],
                                                   output_filename=OUTPUT_RRPROFILE_FILENAME,
                                                   radius=RADIUS, res=STACK_RES, Nbins=NBINS,
-                                                  titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS*1e14:.2e} ~ {MAX_MASS*1e14:.2e} M_sun)")
+                                                  titleend=f"(glmax={GLMAX}, lmax={LMAX}, {MIN_MASS}e14 ~ {MAX_MASS}e14 M_sun)")
 
     t2 = time.time()
     if debug:
         print("Plotted radial profiles, saved to %s.\nTotal time elapsed: %0.5f seconds | %0.5f minutes" \
-              % (OUTPUT_RPROFILE_FILENAME, t2 - t1, (t2 - t1) / 60.))       
+              % (OUTPUT_RPROFILE_FILENAME, t2 - t1, (t2 - t1) / 60.))     
     print("** COMPLETE! **")      
                 
 

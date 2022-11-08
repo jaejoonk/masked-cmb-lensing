@@ -11,6 +11,7 @@ from pixell.pointsrcs import radial_bin
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 from scipy.stats import sem
 
 import healpy as hp
@@ -28,6 +29,9 @@ from orphics import maps, cosmology, io, stats, pixcov
 # my own file(s)
 import websky_stack_and_visualize as josh_websky
 import cmb_ps
+
+#from plottery.plotutils import colorscale, update_rcParams
+#update_rcParams()
 
 ###############################################
 # constants
@@ -56,6 +60,8 @@ MLMAX = 8000
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']
+
+plt.rcParams['axes.labelsize'] = 16
 
 ###############################################
 # helper functions
@@ -109,7 +115,7 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
     alms = map2alm(alm_map, lmax=lmax)
     # falafel.utils to get ucls and tcls
     # this function calls cosmology.loadTheorySpectraFromCAMB
-    ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad)
+    ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
     # returns [fTalm, fEalm, fBalm]
     fTalm = utils.isotropic_filter([alms, alms*0., alms*0.], tcls, lmin, lmax, ignore_te=True)[0]
     # beam?
@@ -120,7 +126,8 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 def alms_inverse_filter(alms, lmin = LMIN, lmax = LMAX, 
                         beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad=True):
     ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
-    falms = utils.isotropic_filter(alms if alms.shape[0] == 3 else [alms, alms*0., alms*0.], tcls, lmin, lmax)
+    if alms.shape[0] == 3: falms = utils.isotropic_filter(alms, tcls, lmin, lmax)
+    else: falms = utils.isotropic_filter([alms, alms*0., alms*0.], tcls, lmin, lmax)
     return ucls, tcls, falms
 
 # run the quadratic estimator from falafel
@@ -134,7 +141,7 @@ def falafel_qe(ucls, falm, xfalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
        xalms = [None, None, None] if xfalm is None else [xfalm, xfalm*0., xfalm*0.]
     else:
        alms = falm
-       xalms = [None] * 3 if xfalm is None else xfalm 
+       xalms = [None, None, None] if xfalm is None else xfalm 
     
     # run the quadratic estimator using the theory ucls
     recon_alms = qe.qe_all(px, ucls, mlmax=mlmax,
@@ -224,11 +231,11 @@ def stack_recon_maps(kappa_map, kapfile_map,
 
     # stack QE recon'd maps 
     stack_map, avg_map = josh_websky.stack_average_random(kappa_map, ra, dec, Ncoords=100,
-                                                        radius=10*RES, res=RES)
+                                                        radius=10*res, res=res)
 
     # stack kap.fits convergence map
-    stack_kap, avg_kap = josh_websky.stack_average_random(kap_map, ra, dec, Ncoords=100,
-                                                        radius=10*RES, res=RES)                                                     
+    stack_kap, avg_kap = josh_websky.stack_average_random(kapfile_map, ra, dec, Ncoords=100,
+                                                        radius=10*res, res=res)                                                     
 
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 24))
 
@@ -353,7 +360,7 @@ def radial_sum_own(imap, res, bins, weights=None):
 # own symlens wrappers
 ###############################################
 def get_s_norms(ests, ucls, tcls, lmin, lmax, shape, wcs,
-                GLMIN = None, GLMAX = None, grad_cut=False):
+                GLMIN = None, GLMAX = None):
     feed_dict = {}
     modlmap = enmap.modlmap(shape, wcs)
     kmask = sutils.mask_kspace(shape, wcs, lmin=lmin, lmax=lmax)
@@ -431,15 +438,15 @@ def gen_coords(coords_filename=COORDS_FILENAME, Ncoords=NCOORDS,
                lowlim=None, highlim=MASS_CUTOFF):
     ras, decs = josh_websky.read_coords_from_file(coords_filename,
                                                   lowlim=lowlim, highlim=highlim)
-    return ras, decs
+    return decs, ras
 
-# create error bars from a full set of stampis
+# create error bars from a full set of stamps
 def gen_rprofile_error_bars(imap, ras, decs, Ncoords=NCOORDS,
                             radius=10*RESOLUTION, res=RESOLUTION,
                             Nbins=20):
-      
-    stamps = josh_websky.stack_random_all(imap, ras, decs, Ncoords=Ncoords,
-                                          radius=radius, res=res)
+    
+    stamps = josh_websky.stack_random_all_mpi(imap, ras, decs, Ncoords=Ncoords,
+                                              radius=radius, res=res)
 
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
@@ -454,9 +461,10 @@ def gen_rprofile_error_bars(imap, ras, decs, Ncoords=NCOORDS,
 # (by default) averaged stack. Returns the output stacked (or averaged) maps, 
 # satisfying the same order as the input.
 def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
-                        output_filename="plot.png", radius=10*RESOLUTION,
-                        res=RESOLUTION, figscale=16, fontsize=13,
+                        output_filename="plot.png", radius=15*RESOLUTION,
+                        res=RESOLUTION, figscale=16, fontsize=20,
                         error_bars=True, Nbins=20, stacked_maps=False):
+    ARCMIN_PER_TICK = 5
     struct = []
     # check if random # of coordinates asked for exceeds # of data points
     if len(ras) < Ncoords: Ncoords = len(ras)
@@ -477,16 +485,30 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
     figscale_x = figscale * 3 // 4 * len(struct)
     fig, axes = plt.subplots(nrows=1, ncols=len(struct), figsize=(figscale_x, figscale))
     
+    xlabel, ylabel ='$\\theta_x$ (arcmin)', '$\\theta_y$ (arcmin)'
+    nticks = int((2 * radius / res) / ARCMIN_PER_TICK) + 1
+    rad_in_arcmin = int(radius / res)
+
+    extent = [-rad_in_arcmin, rad_in_arcmin, -rad_in_arcmin, rad_in_arcmin]
     ims = []
     for i in range(len(struct)):
-        im = axes[i].imshow(struct[i][0 if stacked_maps else 1], cmap='jet')
+        axes[i].grid()
+        axes[i].set_xlabel(xlabel, fontsize=int(fontsize / 1.2))
+        axes[i].set_ylabel(ylabel, fontsize=int(fontsize / 1.2))
+        axes[i].set_xticks(np.linspace(round(-rad_in_arcmin), round(rad_in_arcmin), nticks))
+        axes[i].set_yticks(np.linspace(round(-rad_in_arcmin), round(rad_in_arcmin), nticks))
+
+        im = axes[i].imshow(struct[i][0 if stacked_maps else 1], interpolation='none',
+                            cmap='coolwarm', extent=extent)
+
         ims.append(im)
         if labels is not None and i < len(labels):
             axes[i].set_title(labels[i], fontsize=fontsize)
     
     fig.subplots_adjust(right=0.85)
     for i in range(len(ims)):
-        fig.colorbar(ims[i], ax = axes[i], fraction=0.046, pad=0.04)
+        c = fig.colorbar(ims[i], ax=axes[i], fraction=0.046, pad=0.04)
+        c.set_label(label='Lensing $\\kappa$ (dimensionless)')
 
     plt.tight_layout()
     plt.savefig(output_filename)
@@ -506,19 +528,20 @@ def radial_profiles(signal_maps, error_bars=None, labels=None,
 
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
+    # convert to arcmin from rad
+    radius_centers *= (180./np.pi) * 60.
     binned_profiles = []
     for imap in signal_maps:
         binned_profiles.append(radial_avg_own(imap, res, radius_bins))
     
     plt.figure(figsize=(figsize, figsize))
-    plt.title("Binned (+ stacked) radial profiles of kappa\n%s" % titleend, fontsize=20)
-    plt.xlabel("arcmin", fontsize=16)
-    plt.ylabel(r"$\kappa$", fontsize=16)
+    plt.title("Stacked radial reconstruction profiles of clusters\n%s" % titleend, fontsize=20)
+    plt.xlabel(r"Distance from center $\theta$ (arcmin)", fontsize=16)
+    plt.ylabel(r"Lensing reconstruction profile $\hat\kappa(\theta)$", fontsize=16)
     for i in range(len(binned_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
-        if error_bars is None: plt.plot(radius_centers * (180./np.pi) * 60., binned_profiles[i], label=labeltext)
-        else: plt.errorbar(radius_centers * (180./np.pi) * 60., binned_profiles[i],
-                           yerr=error_bars[i], label=labeltext)
+        if error_bars is None: plt.plot(radius_centers, binned_profiles[i], label=labeltext)
+        else: plt.errorbar(radius_centers, binned_profiles[i], yerr=error_bars[i], label=labeltext)
     
     if labels is not None: plt.legend(fontsize=12)
     plt.savefig(output_filename)
@@ -532,21 +555,25 @@ def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="b
     radius_bins = np.linspace(0, radius, Nbins)
     radius_centers = 0.5 * (radius_bins[1:] + radius_bins[:-1])
     reference_profile = np.array(radial_avg_own(reference, res, radius_bins))
+
+    # convert to arcmin from rad
+    radius_centers *= (180./np.pi) * 60.
+
     ratio_profiles = []
     for imap in signal_maps:
         imap_profile = np.array(radial_avg_own(imap, res, radius_bins))
         ratio_profiles.append((imap_profile - reference_profile) / reference_profile)
 
     plt.figure(figsize=(figsize, figsize))
-    plt.title("Difference in avg binned radial kappa profiles %s" % titleend)
-    plt.xlabel("arcmin")
-    plt.ylabel(r'$(\kappa^{x} - \kappa^{WS kap.fits}) / \kappa^{WS kap.fits}$')
+    plt.title("Residuals in stacked radial cluster profiles\n%s" % titleend, fontsize=20)
+    plt.xlabel(r"Distance from center $\theta$ (arcmin)", fontsize=16)
+    plt.ylabel(r"($\hat\kappa - \kappa^{WebSky}) / \kappa^{WebSky}$", fontsize=16)
 
     for i in range(len(ratio_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
-        plt.plot(radius_centers * (180./np.pi) * 60., ratio_profiles[i], label=labeltext)
+        plt.plot(radius_centers, ratio_profiles[i], label=labeltext)
 
-    plt.plot(radius_centers * (180./np.pi) * 60., ratio_profiles[0] * 0., '--')
+    plt.plot(radius_centers, ratio_profiles[0] * 0., '--')
     if labels is not None: plt.legend()
     plt.savefig(output_filename)
     plt.clf()

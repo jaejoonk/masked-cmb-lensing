@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 import healpy as hp
 from healpy.fitsfunc import read_alm,read_map
 
-import multiprocessing as mp
+# import multiprocessing as mp
 
+from mpi4py import MPI
 import requests, os
 
 WEBSKY_SITE = "https://mocks.cita.utoronto.ca/data/websky/v0.0/"
@@ -25,6 +26,8 @@ RAD = np.deg2rad(0.5)
 OMEGAM_H2 = 0.1428 # planck 2018 vi paper
 RHO = 2.775e11 * OMEGAM_H2
 MASS_CUTOFF = 1.0 # 1e14 solar masses
+
+COMM = MPI.COMM_WORLD
 
 # fetch websky data
 def fetch_data(data = ["kap", "ksz", "alm"]):
@@ -146,6 +149,38 @@ def read_coords_from_file(input_filename, lowlim=None, highlim=None):
 def thumbnails_kw(i, c, radius, res):
         return thumbnails(i, c, r=radius, res=res)
     
+
+def stack_average_random_mpi(imap, ra, dec, Ncoords=NCOORDS,
+                         radius=RAD, res=RESOLUTION):
+    comm = MPI.COMM_WORLD
+    rank, size = comm.Get_rank(), comm.Get_size()
+
+    if rank == 0:
+        idx_random = np.random.choice(len(ra), Ncoords, replace=False)
+        coords = np.array([[dec[i], ra[i]] for i in idx_random])
+        # dividing up tasks to each processor
+        q, r = divmod(coords.size // 2, size)
+        count = 2 * np.array([q + 1 if p < r else q for p in range(size)])
+        disp = np.array([sum(count[:p]) for p in range(size)])
+    else:
+        coords = None
+        count = np.zeros(size, dtype=np.int)
+        disp = None
+    
+    comm.Bcast(count, root=0)
+    coords_buf = np.zeros((count[rank] // 2, 2))
+
+    comm.Scatterv([coords, count, disp, MPI.DOUBLE], coords_buf, root=0)
+
+    thumbs = thumbnails(imap, coords_buf, r=radius, res=res)
+    #print(f"After thumbs, process {rank} has data of size {thumbs.shape}")
+    stack_map = np.sum(utils.allgatherv(thumbs, comm), axis=0)
+ 
+    if rank == 0:
+        avg_map = stack_map / len(ra)
+        return stack_map, avg_map
+
+
 def stack_average_random(imap, ra, dec, Ncoords=NCOORDS,
                          radius=RAD, res=RESOLUTION):
     idx_random = np.random.choice(len(ra), Ncoords, replace=False)
@@ -178,6 +213,33 @@ def stack_random_all(imap, ra, dec, Ncoords=NCOORDS,
 
     thumbs = thumbnails(imap, coords, r=radius, res=res)
     return thumbs
+
+def stack_random_all_mpi(imap, ra, dec, Ncoords=NCOORDS,
+                         radius=RAD, res=RESOLUTION):
+    comm = MPI.COMM_WORLD
+    rank, size = comm.Get_rank(), comm.Get_size()
+
+    if rank == 0:
+        idx_random = np.random.choice(len(ra), Ncoords, replace=False)
+        coords = np.array([[dec[i], ra[i]] for i in idx_random])
+        # dividing up tasks to each processor
+        q, r = divmod(coords.size // 2, size)
+        count = 2 * np.array([q + 1 if p < r else q for p in range(size)])
+        disp = np.array([sum(count[:p]) for p in range(size)])
+    else:
+        coords = None
+        count = np.zeros(size, dtype=np.int)
+        disp = None
+    
+    comm.Bcast(count, root=0)
+    coords_buf = np.zeros((count[rank] // 2, 2))
+
+    comm.Scatterv([coords, count, disp, MPI.DOUBLE], coords_buf, root=0)
+
+    thumbs = thumbnails(imap, coords_buf, r=radius, res=res)
+    # probably stupid, dangerous, or both
+
+    return utils.allgatherv(thumbs, comm)
 
 def stack_random_from_thumbs(thumbs):
     stack = sum([thumbs[i] for i in range(len(thumbs))])
