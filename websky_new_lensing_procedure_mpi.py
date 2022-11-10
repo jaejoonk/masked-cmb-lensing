@@ -236,10 +236,11 @@ def full_procedure(debug=DEBUG):
                                                 output_filename=OUTPUT_RPROFILE_FILENAME,
                                                 radius=RADIUS, res=STACK_RES, Nbins = NBINS,
                                                 titleend=titleend_text)
-        profiles2 = josh_wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], labels=["symlens + sQE", "grad. cut symlens + sQE"],
-                                                    output_filename=OUTPUT_RRPROFILE_FILENAME,
-                                                    radius=RADIUS, res=STACK_RES, Nbins=NBINS,
-                                                    titleend=titleend_text)
+        profiles2 = josh_wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], error_bars=errs,
+                                                      labels=["symlens + sQE", "grad. cut symlens + sQE"],
+                                                      output_filename=OUTPUT_RRPROFILE_FILENAME,
+                                                      radius=RADIUS, res=STACK_RES, Nbins=NBINS,
+                                                      titleend=titleend_text)
 
         t2 = time.time()
         if debug:

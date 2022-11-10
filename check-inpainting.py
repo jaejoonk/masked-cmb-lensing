@@ -5,7 +5,8 @@ from pixell import enmap
 
 COORDS_FILENAME = "coords-snr-5.txt"
 ALM_FILENAME = "websky/lensed_alm.fits"
-INP_FILENAME = "inpainted_map_SNR_5.fits"
+INP_FILENAME = "inpainted_map_ivar_SNR_5.fits"
+#INP_FILENAME = "fake_inpainted_map_SNR_5.fits"
 
 NUM_COORDS = 20
 RESOLUTION = np.deg2rad(0.5/60.) # 0.5 arcmin by default

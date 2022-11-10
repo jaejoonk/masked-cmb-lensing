@@ -5,7 +5,9 @@ from pixell.reproject import healpix2map,thumbnails
 from pixell.curvedsky import alm2map
 
 import numpy as np
-import matplotlib.pyplot as plt
+from cycler import cycler
+from matplotlib import (cm, colors as mplcolors, pyplot as plt,
+                        rcParams)
 
 import healpy as hp
 from healpy.fitsfunc import read_alm,read_map
@@ -328,6 +330,49 @@ def run_routine(output_filename = "all-random"):
 
     plot_all(stack_ksz, avg_ksz, stack_kap, avg_kap, filename=output_filename)
     
-
-
+# straight from https://github.com/cristobal-sifon/plottery/blob/master/src/plottery/plotutils.py
+def update_rcParams(dict={}):
+    """
+    Update matplotlib's rcParams with any desired values. By default,
+    this function sets lots of parameters to my personal preferences,
+    which basically involve larger font and thicker axes and ticks,
+    plus some tex configurations.
+    Returns the rcParams object.
+    """
+    default = {}
+    for tick in ('xtick', 'ytick'):
+        default['{0}.major.size'.format(tick)] = 8
+        default['{0}.minor.size'.format(tick)] = 4
+        default['{0}.major.width'.format(tick)] = 2
+        default['{0}.minor.width'.format(tick)] = 2
+        default['{0}.minor.visible'.format(tick)] = True
+        default['{0}.labelsize'.format(tick)] = 20
+        default['{0}.direction'.format(tick)] = 'in'
+    default['xtick.top'] = True
+    default['ytick.right'] = True
+    default['axes.linewidth'] = 2
+    default['axes.labelsize'] = 22
+    default['font.family'] = 'sans-serif'
+    default['font.size'] = 22
+    default['legend.fontsize'] = 18
+    default['lines.linewidth'] = 2
+    default['text.latex.preamble']=['\\usepackage{amsmath}']
+    # Matthew Hasselfield's color-blind-friendly style
+    default['axes.prop_cycle'] = \
+        cycler(color=['#2424f0','#df6f0e','#3cc03c','#d62728','#b467bd',
+                      '#ac866b','#e397d9','#9f9f9f','#ecdd72','#77becf'])
+    for key in default:
+        # some parameters are not valid in different matplotlib functions
+        try:
+            rcParams[key] = default[key]
+        except KeyError:
+            pass
+    # if any parameters are specified, overwrite anything previously
+    # defined
+    for key in dict:
+        try:
+            rcParams[key] = dict[key]
+        except KeyError:
+            pass
+    return
 

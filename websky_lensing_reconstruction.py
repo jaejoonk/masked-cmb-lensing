@@ -32,6 +32,8 @@ import cmb_ps
 
 #from plottery.plotutils import colorscale, update_rcParams
 #update_rcParams()
+from websky_stack_and_visualize import update_rcParams
+update_rcParams()
 
 ###############################################
 # constants
@@ -61,7 +63,7 @@ BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
 ESTS = ['TT']
 
-plt.rcParams['axes.labelsize'] = 16
+
 
 ###############################################
 # helper functions
@@ -259,19 +261,19 @@ def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords,
 
     for i in range(len(coords)):
         [dec, ra] = coords[i]
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8,12), dpi=80)
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,8), dpi=80)
         
         im1 = axes[0].imshow(inp_thumbnails[i], cmap='jet')
-        axes[0].set_title(f"Inpainted map at (ra={ra:.3f}, dec={dec:.3f})")
+        axes[0].set_title(f"Inpainted map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=14)
         im2 = axes[1].imshow(len_thumbnails[i], cmap='jet')
-        axes[1].set_title(f"Lensed map at (ra={ra:.3f}, dec={dec:.3f})")
+        axes[1].set_title(f"Lensed map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=14)
 
         fig.subplots_adjust(right=0.85)
         fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
         fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
         
         plt.tight_layout()
-        plt.savefig(f"lensed_vs_inpaint_map_{i}.png")
+        plt.savefig(f"lensed_vs_fake_inpaint_map_{i}.png")
         plt.clf()
 
 # symlens normalization
@@ -430,6 +432,25 @@ def random_ra_dec(N, zero=1e-4):
     colat, ra = hp.vec2ang(np.array(xyz))
     return ra, np.pi/2 - colat
 
+# generate (N, 2) array of coordinates within a RA range + dec range
+# iterative
+def random_coords_range(N, ra_min=None, ra_max=None, dec_min=None, dec_max=None, zero=1e-4):
+    coords = np.empty((0,2))
+    while len(coords) < N:
+        ras, decs = random_ra_dec(N, zero)
+        prob_coords = np.column_stack((ras, decs))
+        # filter ras
+        if ra_min is not None:
+            prob_coords = prob_coords[prob_coords[:,0] >= ra_min]
+        if ra_max is not None:
+            prob_coords = prob_coords[prob_coords[:,0] <= ra_max]
+        if dec_min is not None:
+            prob_coords = prob_coords[prob_coords[:,1] >= dec_min]
+        if dec_max is not None:
+            prob_coords = prob_coords[prob_coords[:,1] <= dec_max]
+        coords = np.append(coords, prob_coords, axis=0)
+    return np.array(coords[:N])
+
 ###############################################
 # Stacker and plotter functions
 ###############################################
@@ -498,17 +519,18 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
         axes[i].set_xticks(np.linspace(round(-rad_in_arcmin), round(rad_in_arcmin), nticks))
         axes[i].set_yticks(np.linspace(round(-rad_in_arcmin), round(rad_in_arcmin), nticks))
 
-        im = axes[i].imshow(struct[i][0 if stacked_maps else 1], interpolation='none',
-                            cmap='coolwarm', extent=extent)
+        im = axes[i].imshow(struct[i][0 if stacked_maps else 1],
+                            interpolation='none', cmap='coolwarm', extent=extent)
 
         ims.append(im)
         if labels is not None and i < len(labels):
             axes[i].set_title(labels[i], fontsize=fontsize)
-    
-    fig.subplots_adjust(right=0.85)
+
     for i in range(len(ims)):
         c = fig.colorbar(ims[i], ax=axes[i], fraction=0.046, pad=0.04)
         c.set_label(label='Lensing $\\kappa$ (dimensionless)')
+
+    fig.subplots_adjust(right=0.85)
 
     plt.tight_layout()
     plt.savefig(output_filename)
@@ -534,22 +556,25 @@ def radial_profiles(signal_maps, error_bars=None, labels=None,
     for imap in signal_maps:
         binned_profiles.append(radial_avg_own(imap, res, radius_bins))
     
-    plt.figure(figsize=(figsize, figsize))
+    plt.figure(figsize=(int(1.2*figsize), figsize))
+    ax = plt.gca()
     plt.title("Stacked radial reconstruction profiles of clusters\n%s" % titleend, fontsize=20)
-    plt.xlabel(r"Distance from center $\theta$ (arcmin)", fontsize=16)
-    plt.ylabel(r"Lensing reconstruction profile $\hat\kappa(\theta)$", fontsize=16)
+    plt.xlabel(r"Distance from center $\theta$ (arcmin)")
+    plt.ylabel(r"Lensing reconstruction profile $\hat\kappa(\theta)$")
     for i in range(len(binned_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
         if error_bars is None: plt.plot(radius_centers, binned_profiles[i], label=labeltext)
         else: plt.errorbar(radius_centers, binned_profiles[i], yerr=error_bars[i], label=labeltext)
     
-    if labels is not None: plt.legend(fontsize=12)
+    if labels is not None: plt.legend(loc='upper right')
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.05))
     plt.savefig(output_filename)
     plt.clf()
 
     return binned_profiles
 
-def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="binned_radial_profiles_ratio.png",
+def radial_profile_ratio(signal_maps, reference, error_bars=None, labels=None,
+                         output_filename="binned_radial_profiles_ratio.png",
                          radius=10*RESOLUTION, res=RESOLUTION, Nbins=20, figsize=10, titleend=""):
 
     radius_bins = np.linspace(0, radius, Nbins)
@@ -560,18 +585,37 @@ def radial_profile_ratio(signal_maps, reference, labels=None, output_filename="b
     radius_centers *= (180./np.pi) * 60.
 
     ratio_profiles = []
+    imap_profiles = []
     for imap in signal_maps:
         imap_profile = np.array(radial_avg_own(imap, res, radius_bins))
+        imap_profiles.append(imap_profile)
         ratio_profiles.append((imap_profile - reference_profile) / reference_profile)
+    ratio_profiles = np.array(ratio_profiles)
+    imap_profiles = np.array(imap_profiles)
+
+    # calculate propagated errors
+    if error_bars is not None:
+        error_bars = np.array(error_bars)
+        print("error_bars shape: ", error_bars.shape)
+        prop_errors = []
+        ref_errors = error_bars[-1]
+        for i in range(len(error_bars[:-1])):
+            # observed minus true
+            numerator = np.sqrt(error_bars[i]**2 + ref_errors**2)
+            # divided by true
+            prop_error = np.sqrt((numerator / (imap_profile[i] - reference_profile))**2 + \
+                                 (ref_errors / reference_profile)**2)
+            prop_errors.append(prop_error)
 
     plt.figure(figsize=(figsize, figsize))
     plt.title("Residuals in stacked radial cluster profiles\n%s" % titleend, fontsize=20)
-    plt.xlabel(r"Distance from center $\theta$ (arcmin)", fontsize=16)
-    plt.ylabel(r"($\hat\kappa - \kappa^{WebSky}) / \kappa^{WebSky}$", fontsize=16)
+    plt.xlabel(r"Distance from center $\theta$ (arcmin)")
+    plt.ylabel(r"($\hat\kappa - \kappa^{WebSky}) / \kappa^{WebSky}$")
 
     for i in range(len(ratio_profiles)):
         labeltext = ("" if (labels is None or i >= len(labels)) else labels[i])
-        plt.plot(radius_centers, ratio_profiles[i], label=labeltext)
+        if error_bars is None: plt.plot(radius_centers, ratio_profiles[i], label=labeltext)
+        else: plt.errorbar(radius_centers, ratio_profiles[i], yerr=prop_errors[i], label=labeltext)
 
     plt.plot(radius_centers, ratio_profiles[0] * 0., '--')
     if labels is not None: plt.legend()
