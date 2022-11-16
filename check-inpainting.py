@@ -4,8 +4,9 @@ import numpy as np
 from pixell import enmap
 
 COORDS_FILENAME = "coords-snr-5.txt"
-ALM_FILENAME = "websky/lensed_alm.fits"
-INP_FILENAME = "inpainted_map_ivar_SNR_5.fits"
+# ALM_FILENAME = "websky/lensed_alm.fits"
+INP_FILENAME = "inpainted_null_map_beam_conv_6000.fits"
+INP2_FILENAME = "uninpainted_null_map_beam_conv_6000.fits"
 #INP_FILENAME = "fake_inpainted_map_SNR_5.fits"
 
 NUM_COORDS = 20
@@ -17,10 +18,10 @@ coords = np.loadtxt(COORDS_FILENAME)
 sampled = coords[np.random.choice(len(coords), NUM_COORDS, replace=False)]
 
 inpainted_map = enmap.read_map(INP_FILENAME)
-lensed_map = josh_wlrecon.almfile_to_map(ALM_FILENAME)
+uninpainted_map = enmap.read_map(INP2_FILENAME)
 
-josh_wlrecon.lensed_vs_inpaint_map(inpainted_map, lensed_map,
-                                   sampled,
+josh_wlrecon.lensed_vs_inpaint_map(inpainted_map, uninpainted_map,
+                                   sampled, title="websky-inpaint-vs-noninpaint",
                                    radius=RADIUS, res=RESOLUTION)
 
 # relative stacked profiles

@@ -29,11 +29,12 @@ import argparse
 ###############################################
 DEBUG = True
 
+PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = "inpainted_map_SNR_5.fits"
-HALOS_FILENAME = "$SCRATCH/halos.pksc"
+MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_beam_conv.fits"
+HALOS_FILENAME = PATH_TO_SCRATCH + "halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
 OTHER_COORDS = None
@@ -52,9 +53,9 @@ MIN_MASS = 1. # 1e14 solar masses
 MAX_MASS = 6. # 1e14 solar masses
 
 LMIN = 300
-LMAX = 6000
+LMAX = 3000
 GLMAX = 2000
-MLMAX = 8000
+MLMAX = 4000
 
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
@@ -166,15 +167,10 @@ def full_procedure(debug=DEBUG):
         if debug:
             print("Computed tempura's lensing normalization for uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))
 
-        np.savetxt("ucls.txt", ucls['TT'])
-        np.savetxt("tcls.txt", tcls['TT'])
         sym_shape, sym_wcs = enmap.geometry(res=SYM_RES, pos=[0,0], shape=SYM_SHAPE, proj='plain')
         s_norms =     josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs)
         cut_s_norms = josh_wlrecon.get_s_norms(ESTS, ucls, tcls, LMIN, LMAX, sym_shape, sym_wcs,
                                                GLMIN=LMIN, GLMAX=GLMAX)
-
-        np.savetxt("s_norms.txt", s_norms['TT'])
-        np.savetxt("s_cut_norms.txt", cut_s_norms['TT'])
 
         kells = np.arange(Al_temp.shape[0])
         
@@ -192,8 +188,6 @@ def full_procedure(debug=DEBUG):
         symlens_map = josh_wlrecon.mapper(kells_factor * Al_sym, recon_alms, res=RESOLUTION, lmin=1, lmax=LMAX)
         # tempura_map = josh_wlrecon.mapper(Al_temp * kells_factor, recon_alms, res=RESOLUTION)
         cut_symlens_map = josh_wlrecon.mapper(kells_factor * Al_cut_sym, cut_recon_alms, res=RESOLUTION, lmin=1, lmax=LMAX)
-
-        enmap.write_map("symlens_map.fits", symlens_map)
 
         if debug:
             print("Created kappa maps for cut + uncut QE. Total time elapsed: %0.5f seconds" % (time.time() - t1))

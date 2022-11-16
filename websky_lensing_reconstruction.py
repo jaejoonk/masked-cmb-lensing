@@ -11,6 +11,7 @@ from pixell.pointsrcs import radial_bin
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from matplotlib import ticker
 from scipy.stats import sem
 
@@ -99,7 +100,7 @@ def almfile_to_alms(alm_filename = ALM_FILENAME):
     return read_alm(alm_filename, hdu=(1,2,3))
 
 # filter convergence file to an lmax and return map
-def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
+def kapfile_to_map(kap_filename = KAP_FILENAME, mlmax=MLMAX, res = RESOLUTION):
     # create a pixell shape + wcs for the full sky geometry with an input resolution
     shape, wcs = enmap.fullsky_geometry(res=res)
     # use my function to convert the input kappa file into a map object with the provided resolution
@@ -107,7 +108,7 @@ def kapfile_to_map(kap_filename = KAP_FILENAME, lmax = LMAX, res = RESOLUTION):
     
     # convert input map into alms to filter to a maximum ell, and then convert back to a map
     # with the full sky geometry w/ given resolution
-    kap_alms = maps.change_alm_lmax(map2alm(kap_px, lmax=lmax), MLMAX)
+    kap_alms = maps.change_alm_lmax(map2alm(kap_px, lmax=mlmax), mlmax)
     return alm2map(kap_alms, enmap.empty(shape, wcs, dtype=np.float32))
 
 # inverse filter the alms onto [lmin, lmax] and introduce 1/f noise
@@ -128,6 +129,8 @@ def alm_inverse_filter(alm_map, lmin = LMIN, lmax = LMAX,
 def alms_inverse_filter(alms, lmin = LMIN, lmax = LMAX, 
                         beam_fwhm = BEAM_FWHM, noise_t = NOISE_T, grad=True):
     ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(beam_fwhm, noise_t, grad=grad, lmax=lmax)
+    # deconvolve beam
+    alms = almxfl(alms, lambda ells: 1./maps.gauss_beam(ells, BEAM_FWHM))
     if alms.shape[0] == 3: falms = utils.isotropic_filter(alms, tcls, lmin, lmax)
     else: falms = utils.isotropic_filter([alms, alms*0., alms*0.], tcls, lmin, lmax)
     return ucls, tcls, falms
@@ -224,6 +227,12 @@ def mapper(norms, alms, res=RESOLUTION, lmin=LMIN, lmax=LMAX):
                                   else norms[i] for i in range(len(norms))]))
     return alm2map(phi_product, enmap.empty(shape, wcs, dtype=np.float32))
 
+# apply mask onto map and return the result
+def apply_mask(imap, mask, lmax=LMAX):
+    reshaped_map = alm2map(map2alm(imap, lmax=LMAX),
+                           enmap.empty(shape=mask.shape, wcs=mask.wcs))
+    return reshaped_map * mask
+
 # stack recon maps 
 def stack_recon_maps(kappa_map, kapfile_map, 
                      halos_filename=HALOS_FILENAME, res=STACK_RES,
@@ -254,26 +263,32 @@ def stack_recon_maps(kappa_map, kapfile_map,
     plt.savefig(output_filename)
 
 # plot inpainted vs lensed alm maps
-def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords, 
+def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords, title="lensed_vs_inpaint",
                           radius=10*RESOLUTION, res=RESOLUTION):
     inp_thumbnails = thumbnails(inpainted_map, coords, r=radius, res=res)
     len_thumbnails = thumbnails(lensed_map, coords, r=radius, res=res)
 
     for i in range(len(coords)):
         [dec, ra] = coords[i]
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12,8), dpi=80)
-        
-        im1 = axes[0].imshow(inp_thumbnails[i], cmap='jet')
-        axes[0].set_title(f"Inpainted map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=14)
-        im2 = axes[1].imshow(len_thumbnails[i], cmap='jet')
-        axes[1].set_title(f"Lensed map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=14)
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,10), dpi=80)
+        circle = Circle(xy=(int(radius/res), int(radius/res)),
+                         radius=12, color='black', fill=False)
+        circle2 = Circle(xy=(int(radius/res), int(radius/res)),
+                         radius=12, color='black', fill=False)
 
+        im1 = axes[0].imshow(inp_thumbnails[i], cmap='jet')
+        axes[0].set_title(f"Inpainted kappa map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        axes[0].add_patch(circle)
+        im2 = axes[1].imshow(len_thumbnails[i], cmap='jet')
+        axes[1].set_title(f"Non-inpainted kappa map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        axes[1].add_patch(circle2)
+        
         fig.subplots_adjust(right=0.85)
         fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
         fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
         
         plt.tight_layout()
-        plt.savefig(f"lensed_vs_fake_inpaint_map_{i}.png")
+        plt.savefig(f"{title}_{i}.png")
         plt.clf()
 
 # symlens normalization
@@ -485,7 +500,7 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
                         output_filename="plot.png", radius=15*RESOLUTION,
                         res=RESOLUTION, figscale=16, fontsize=20,
                         error_bars=True, Nbins=20, stacked_maps=False):
-    ARCMIN_PER_TICK = 5
+    ARCMIN_PER_TICK = 10
     struct = []
     # check if random # of coordinates asked for exceeds # of data points
     if len(ras) < Ncoords: Ncoords = len(ras)
@@ -494,7 +509,7 @@ def stack_and_plot_maps(maps, ras, decs, Ncoords=NCOORDS, labels=None,
     for imap in maps:
         if error_bars:
             rs, errs, stacked_map, avg_map = gen_rprofile_error_bars(imap, ras, decs, 
-                                             Ncoords=Ncoords, radius=radius, res=res, Nbins=Nbins)
+                                             Ncoords=Ncoords, radius=2*radius, res=res, Nbins=2*Nbins)
             struct_errors.append(errs)
         else:
             stacked_map, avg_map = josh_websky.stack_average_random(imap, ras, decs,
