@@ -13,7 +13,7 @@ import websky_lensing_reconstruction as josh_wlrecon
 import websky_stack_and_visualize as josh_wstack
 import cmb_ps
 
-import time
+import time, string, os
 
 ESTS = ['TT']
 RESOLUTION = np.deg2rad(0.5/60.)
@@ -22,24 +22,30 @@ rank = COMM.Get_rank()
 
 # let's convert our lensed alms to a map
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
-ALM_FILENAME = "websky/lensed_alm.fits"
-#ALM_FILENAME = PATH_TO_SCRATCH + "sehgal/sehgal_lensed_map.fits"
+#ALM_FILENAME = "websky/lensed_alm.fits"
+
+ALM_FILENAME = PATH_TO_SCRATCH + "maps/lensed_cmb_alm_websky_cmb1999_lmax6000.fits"
+# ALM_FILENAME = None
+MAP_FILENAME = PATH_TO_SCRATCH + "maps/cmb_night_pa5_f150_8way_coadd_map.fits"
+IVAR_FILENAME = PATH_TO_SCRATCH + "maps/cmb_night_pa5_f150_8way_coadd_ivar.fits"
+MASK_FILENAME = PATH_TO_SCRATCH + "act_mask_20220316_GAL060_rms_70.00_d2sk.fits"
+
 COORDS_FILENAME = "output_halos_10259.txt"
 COORDS_OUTPUT = "coords-10259.txt"
 COORDS = 10259
-#SNR_COORDS_FILENAME = "fake-snr-5-coords-dec-limited.txt"
-SNR_COORDS_FILENAME = "coords-60-10259.txt"
-#SNR_COORDS_FILENAME = "coords-snr-5.txt"
 
-shape, wcs = enmap.fullsky_geometry(res=RESOLUTION)
-omap = enmap.empty(shape, wcs, dtype=np.float32)
+SNR_COORDS_FILENAME = "coords-snr-5.txt"
 
 MIN_MASS = 1.0 # 1e14
 MAX_MASS = 100.0 # 1e14
 
 HOLE_RADIUS = np.deg2rad(6.0/60.)
 NOISE_T = 10. # muK arcmin
-IVAR = maps.ivar(shape=shape, wcs=wcs, noise_muK_arcmin=NOISE_T)
+
+FULL_SHAPE, FULL_WCS = enmap.fullsky_geometry(res=RESOLUTION)
+IVAR = maps.ivar(shape=FULL_SHAPE, wcs=FULL_WCS, noise_muK_arcmin=NOISE_T)
+#IVAR = enmap.downgrade(enmap.read_map(IVAR_FILENAME), 2, op=np.sum)
+MASK = enmap.read_map(MASK_FILENAME)
 OUTPUT_DIR = "/global/cscratch1/sd/jaejoonk/inpaint_geos/"
 BEAM_FWHM = 1.5 # arcmin
 BEAM_SIG = BEAM_FWHM / (8 * np.log(2))**0.5 
@@ -49,6 +55,18 @@ THEORY_FN = cosmology.default_theory().lCl
 ## probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
 SNR = 5
+
+CONTEXT_FRACTION = 1.
+
+UNINPAINTED_MAP_NAME = f"uninpainted_map_newalms_{NOISE_T}muK_{CONTEXT_FRACTION:0.2f}cf.fits"
+INPAINTED_MAP_NAME = f"inpainted_map_newalms_{NOISE_T}muK_{CONTEXT_FRACTION:0.2f}cf.fits"
+
+# random 8 letter name
+if rank == 0:
+    FOLDER_NAME = "".join(np.random.choice(np.array(list(string.ascii_lowercase)), size=8)) + "/"
+else:
+    FOLDER_NAME = ""
+COMM.bcast(FOLDER_NAME, root=0)
 
 def mass_gen_coords(min_mass=MIN_MASS, max_mass=MAX_MASS, ncoords=COORDS,
                     coords_filename=COORDS_FILENAME, coords_output=COORDS_OUTPUT):
@@ -66,50 +84,64 @@ def mass_gen_coords(min_mass=MIN_MASS, max_mass=MAX_MASS, ncoords=COORDS,
 
     return coords
     
-
 def save_geometries(coords, hole_rad=HOLE_RADIUS, ivar=IVAR, output_dir=OUTPUT_DIR,
                     theory_fn=THEORY_FN, beam_fn=BEAM_FN, comm=COMM):
-    if rank == 0: print(f"Saving geometries now...")
+    if rank == 0:
+        print(f"Saving geometries now...")
+        os.mkdir(output_dir + FOLDER_NAME)
+        print(f"Created directory {FOLDER_NAME}.")
 
+
+    comm.Barrier()
     t1 = time.time()
-    pixcov.inpaint_uncorrelated_save_geometries(coords, hole_rad, ivar, output_dir,
+    pixcov.inpaint_uncorrelated_save_geometries(coords, hole_rad, ivar, output_dir + FOLDER_NAME,
                                                 theory_fn=theory_fn, beam_fn=beam_fn,
-                                                pol=False, comm=comm)
+                                                pol=False, context_fraction=CONTEXT_FRACTION, comm=comm)
 
     t2 = time.time() 
     if rank == 0: print(f"Done saving geometries after {t2-t1:0.5f} seconds!")
 
-def inpainting(output_dir=OUTPUT_DIR, alm_filename=ALM_FILENAME, res=RESOLUTION, lmax=MLMAX,
-               beam_fwhm=BEAM_FWHM, ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS):
+def inpainting(output_dir=OUTPUT_DIR, map_filename=MAP_FILENAME, alm_filename=ALM_FILENAME,
+               mask_filename=MASK_FILENAME, res=RESOLUTION, lmax=MLMAX, beam_fwhm=BEAM_FWHM,
+               ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS):
     ## reconvolve beam?
     if rank == 0:
         # only for sehgal
-        #lensed_map = cs.alm2map(hp.sphtfunc.map2alm(hp.read_map(alm_filename)),
-        #                        enmap.empty(shape, wcs, dtype=np.float32))
-        lensed_map = josh_wlrecon.almfile_to_map(alm_filename=alm_filename, res=res)
-        lensed_alms_plus_beam = cs.almxfl(cs.map2alm(lensed_map, lmax=lmax), BEAM_FN)
-        lensed_map = cs.alm2map(lensed_alms_plus_beam, enmap.empty(shape, wcs, dtype=np.float32)) 
+        if alm_filename is not None:
+            lensed_map = cs.alm2map(hp.sphtfunc.map2alm(hp.read_map(alm_filename)),
+                                    enmap.empty(FULL_SHAPE, FULL_WCS, dtype=np.float32))
+            lensed_map = josh_wlrecon.almfile_to_map(alm_filename=alm_filename, res=res)
+        else:
+            lensed_map = enmap.read_map(map_filename)[0]
+            #io.hplot(lensed_map, PATH_TO_SCRATCH + "pre_inpainted_pre_mask_data_map", downgrade=2)
+        
+        lensed_map = josh_wlrecon.apply_mask(lensed_map, MASK, lmax=lmax)
+        #io.hplot(lensed_map, PATH_TO_SCRATCH + "pre_inpainted_post_mask_data_map")
+        lensed_alms_plus_beam = cs.almxfl(cs.map2alm(lensed_map, lmax=lmax, tweak=True), BEAM_FN)
+        lensed_map = cs.alm2map(lensed_alms_plus_beam, enmap.empty(MASK.shape, MASK.wcs, dtype=np.float32)) 
         # add a noise profile
-        lensed_map += maps.white_noise(shape=shape, wcs=wcs, noise_muK_arcmin=NOISE_T)
-        enmap.write_map(f"uninpainted_halo_catalog_map_beam_conv_{MLMAX}.fits", lensed_map, fmt="fits")
+        lensed_map += maps.white_noise(shape=MASK.shape, wcs=MASK.wcs, noise_muK_arcmin=NOISE_T)
+        #io.hplot(lensed_map, PATH_TO_SCRATCH + "pre_inpainted_post_mask_noisy_data_map")
+        enmap.write_map(UNINPAINTED_MAP_NAME, lensed_map, fmt="fits")
 
         print("Saved uninpainted map to disk.")
     #io.hplot(lensed_map, "pre_inpainted_map_view.png")
     else:
-        lensed_map = enmap.zeros(shape, wcs=wcs, dtype=np.float32)
+        lensed_map = enmap.zeros(MASK.shape, wcs=MASK.wcs, dtype=np.float32)
     
     COMM.Barrier()
     COMM.Bcast(lensed_map, root=0)
 
     t1 = time.time()
-    inpainted_map = pixcov.inpaint_uncorrelated_from_saved_geometries(lensed_map, output_dir, norand=False)
+    inpainted_map = pixcov.inpaint_uncorrelated_from_saved_geometries(lensed_map, output_dir,
+                                                                      norand=False, zeroout=False)
     t2 = time.time()
 
     COMM.Barrier()
     # don't need parallel processes anymore?
     if rank != 0: exit()
 
-    enmap.write_map(f"inpainted_halo_catalog_map_beam_conv_{MLMAX}.fits", inpainted_map, fmt="fits")
+    enmap.write_map(INPAINTED_MAP_NAME, inpainted_map, fmt="fits")
     print(f"Time for inpainting from geometries: {t2-t1:0.5f} seconds")
 
     ## deconvolve beam
@@ -122,11 +154,10 @@ def inpainting(output_dir=OUTPUT_DIR, alm_filename=ALM_FILENAME, res=RESOLUTION,
     #else: enmap.write_map(f"inpainted_map_ivar_{MIN_MASS:.1f}_to_{MAX_MASS:.1f}.fits", inpainted_map, fmt="fits")
     #print(f"Saved map.")
 
-
 def do_all(saved=False, ifsnr = True):
     if not ifsnr: c = mass_gen_coords()
     else:
-        d = np.loadtxt(SNR_COORDS_FILENAME, delimiter=",")
+        d = np.loadtxt(SNR_COORDS_FILENAME)
         c = np.column_stack((d[:,0], d[:,1]))
 
     if not saved: save_geometries(c)
@@ -134,4 +165,4 @@ def do_all(saved=False, ifsnr = True):
     inpainting()
 
 if __name__ == '__main__':
-    do_all(saved=True)
+    do_all(saved=False)

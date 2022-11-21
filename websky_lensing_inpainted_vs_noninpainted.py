@@ -31,10 +31,12 @@ DEBUG = True
 
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
+MASK_FILENAME = PATH_TO_SCRATCH + "act_mask_20220316_GAL060_rms_70.00_d2sk.fits"
 KAP_FILENAME = "websky/kap.fits"
+#KAP_FILENAME = PATH_TO_SCRATCH + "maps/kappa_alm_lmax6000.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_beam_conv_6000.fits"
-MAP2_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_beam_conv_6000.fits"
+MAP_FILENAME = "inpainted_fake_map_6000.fits"
+MAP2_FILENAME = "uninpainted_fake_map_6000.fits"
 HALOS_FILENAME = PATH_TO_SCRATCH + "halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
@@ -44,7 +46,7 @@ LWIDTH = 50
 
 RESOLUTION = np.deg2rad(0.5 / 60.)
 STACK_RES = np.deg2rad(0.5 / 60.)
-RADIUS = STACK_RES * 10. # 10 arcmin
+RADIUS = STACK_RES * 20. # 10 arcmin
 SYM_RES = np.deg2rad(0.5 / 60.)
 SYM_SHAPE = (2000,2000)
 RAD = np.deg2rad(0.5)
@@ -56,7 +58,7 @@ MAX_MASS = 6. # 1e14 solar masses
 LMIN = 600
 LMAX = 3000
 GLMAX = 2000
-MLMAX = 4000
+MLMAX = 6000
 
 BEAM_FWHM = 1.5 # arcmin
 NOISE_T = 10. # noise stdev in uK-acrmin
@@ -106,9 +108,9 @@ oneprint(f"Using alms from inpainted map {MAP_FILENAME}.")
 if args.verbose: DEBUG = args.verbose
 
 minstr, maxstr = "SNR", "5"
-OUTPUT_STACKS_FILENAME = f"stacks-inp-vs-noninp-kappa-{minstr}to{maxstr}-{LMAX}.png"
-OUTPUT_RPROFILE_FILENAME = f"rbin-profiles-kappa-{minstr}to{maxstr}-{LMAX}.png"
-OUTPUT_RRPROFILE_FILENAME = f"rbin-profiles-diff-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_STACKS_FILENAME = f"stacks-inp-vs-noninp-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_RPROFILE_FILENAME = f"rbin-profiles-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_RRPROFILE_FILENAME = f"rbin-profiles-diff-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
 
 ###############################################
 # Lensing reconstruction
@@ -121,7 +123,10 @@ def full_procedure(debug=DEBUG):
         ialms = cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX)
         ualms = cs.map2alm(enmap.read_map(MAP2_FILENAME), lmax=MLMAX)
         kap_map = wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, mlmax=MLMAX,
-                                            res=RESOLUTION)
+                                         res=RESOLUTION)
+        #s, w = enmap.fullsky_geometry(res=RESOLUTION)
+        #kap_map = cs.alm2map(hp.read_alm(KAP_FILENAME),
+        #                     enmap.empty(shape=s, wcs=w, dtype=np.float32))
         kap_map = kap_map - kap_map.mean()
         
         if debug:
@@ -179,6 +184,11 @@ def full_procedure(debug=DEBUG):
     COMM.Bcast(isymlens_map, root=0)
     COMM.Bcast(usymlens_map, root=0)
     COMM.Bcast(kap_map, root=0)
+
+    #mask_map = enmap.read_map(MASK_FILENAME)
+    #isymlens_map = wlrecon.apply_mask(isymlens_map, mask_map)
+    #usymlens_map = wlrecon.apply_mask(usymlens_map, mask_map)
+    #kap_map = wlrecon.apply_mask(kap_map, mask_map)
    
     errs, avgd_maps = wlrecon.stack_and_plot_maps([isymlens_map, usymlens_map, kap_map],
                                                    ras, decs, Ncoords = NCOORDS,
@@ -194,19 +204,23 @@ def full_procedure(debug=DEBUG):
                                                                                                         time.time() - t1))
         titleend_text = "(SNR > 5)"
     
-        profiles = wlrecon.radial_profiles(avgd_maps, error_bars=errs,
+        rs, profiles = wlrecon.radial_profiles(avgd_maps, error_bars=errs,
                                            labels=["Inpainted symlens + sQE",
                                                    "Non-inpainted symlens + sQE",
                                                    "kap.fits"], 
                                            output_filename=OUTPUT_RPROFILE_FILENAME,
-                                           radius=2*RADIUS, res=STACK_RES, Nbins = 2*NBINS,
+                                           radius=RADIUS, res=STACK_RES, Nbins = 2*NBINS,
                                            titleend=titleend_text)
+
+        for i in range(len(profiles)):
+            np.savetxt(f"profiles_{i}.txt", np.column_stack((rs, profiles[i])))
+        print("Saved profiles to disk.")
         profiles2 = wlrecon.radial_profile_ratio(avgd_maps[:-1], avgd_maps[-1], error_bars=errs,
                                                  labels=["Inpainted symlens + sQE",
                                                          "Non-inpainted symlens + sQE",
                                                          "kap.fits"],
                                                  output_filename=OUTPUT_RRPROFILE_FILENAME,
-                                                 radius=2*RADIUS, res=STACK_RES, Nbins=2*NBINS,
+                                                 radius=RADIUS, res=STACK_RES, Nbins=2*NBINS,
                                                  titleend=titleend_text)
 
         t2 = time.time()

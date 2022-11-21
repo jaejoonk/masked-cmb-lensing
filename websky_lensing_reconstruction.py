@@ -586,7 +586,7 @@ def radial_profiles(signal_maps, error_bars=None, labels=None,
     plt.savefig(output_filename)
     plt.clf()
 
-    return binned_profiles
+    return radius_centers, binned_profiles
 
 def radial_profile_ratio(signal_maps, reference, error_bars=None, labels=None,
                          output_filename="binned_radial_profiles_ratio.png",

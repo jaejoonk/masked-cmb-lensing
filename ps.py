@@ -35,8 +35,8 @@ PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 #KAP_FILENAME = PATH_TO_SCRATCH + "sehgal/tSZ_skymap_healpix_nopell_Nside4096_y_tSZrescale0p75.fits"
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-INP_MAP_FILENAME = "inpainted_halo_catalog_map_beam_conv_6000.fits"
-NOINP_MAP_FILENAME = "uninpainted_halo_catalog_map_beam_conv_6000.fits"
+INP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_data_6000.fits"
+NOINP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_data_6000.fits"
 #BAD_MAP_FILENAME = "fake_inpainted_map_SNR_5.fits"
 
 ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
@@ -93,7 +93,7 @@ pl_tt._ax.set_ylabel(r'$(C_L^{T_{inp} T_{inp}} - C_L^{TT}) /  C_L^{TT}$', fontsi
 pl_tt._ax.set_xlabel(r'$L$', fontsize=20)
 pl_tt._ax.legend(fontsize=30)
 pl_tt.hline(y=0)
-pl_tt.done(f"ps_cltt_websky_{ESTS[0]}.png")
+pl_tt.done(f"ps_cltt_2_3_websky_{ESTS[0]}.png")
 
 # try reconstructing?
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, grad=True, lmax=LMAX)
@@ -174,9 +174,9 @@ for est in ESTS:
     
     # convolve reconstruction w/ normalization
     norm_recon_alms[est] = plensing.phi_to_kappa(hp.almxfl(recon_alms[est][0].astype(np.complex128), Al[est][0]))
-    hp.fitsfunc.write_alm(f"uninpainted_recon_alms_websky_halo_{est}.fits", norm_recon_alms[est])
+    hp.fitsfunc.write_alm(f"uninpainted_recon_alms_websky_2_3_{est}.fits", norm_recon_alms[est])
     norm_irecon_alms[est] = plensing.phi_to_kappa(hp.almxfl(irecon_alms[est][0].astype(np.complex128), Al[est][0]))
-    hp.fitsfunc.write_alm(f"inpainted_recon_alms_websky_halo_{est}.fits", norm_irecon_alms[est])
+    hp.fitsfunc.write_alm(f"inpainted_recon_alms_websky_2_3_{est}.fits", norm_irecon_alms[est])
 
     #enmap.write_map("inpainted-kappa-ivar.fits", convert_alm_to_map(norm_irecon_alms[est]), fmt="fits")
     #enmap.write_map("uninpainted-kappa-ivar.fits", convert_alm_to_map(norm_recon_alms[est]), fmt="fits")
@@ -203,12 +203,12 @@ for est in ESTS:
 
     pl.add(ells,(ells*(ells+1.)/2.)**2. * Al[est][0],ls='--', label="noise PS (per mode)")
     #pl.add(ells,rcls,label='recon x recon')
-    pl.add(ells,ixinp_cls,label='inpaint x input')
+    pl.add(ells,ixinp_cls,label='inpaint (2/3) x input')
     #pl.add(ells,ixfinp_cls,label='null inpaint x input')
     pl.add(ells,rxi_cls,label='non-inpaint x input')
     pl.add(ells,icls,label='input x input')
 
-    pl2.add(*bin2((ixinp_cls-icls)/icls),marker='o',label="inpaint (ivar = 10 uK-arcmin) x input Clkk")
+    pl2.add(*bin2((ixinp_cls-icls)/icls),marker='o',label="inpaint (c.f. 2/3) x input Clkk")
     #pl2.add(*bin2((ixinp2_cls-icls)/icls),marker='o',label="inpaint (ivar) x input Clkk")
     pl2.add(*bin2((rxi_cls-icls)/icls),marker='o',label="non-inpaint x input Clkk")
     #pl2.add(*bin2((ixfinp_cls-icls)/icls),marker='o',label="null inpaint x input Clkk")
@@ -219,7 +219,7 @@ for est in ESTS:
     #pl2._ax.set_ylabel(r'$(C_L^{\hat\kappa \kappa_{i}} - C_L^{\kappa_{i} \kappa_{i}}) /  C_L^{\kappa_{i} \kappa_{i}}$', fontsize=16)
     #pl2._ax.legend()
     pl2.hline(y=0)
-    pl2._ax.set_ylim(-0.2,0.2)
+    pl2._ax.set_ylim(-0.3,0.3)
 
     """
     pl3.add(*bin((rcls - inpcls)/inpcls),marker='o')
@@ -232,8 +232,8 @@ for est in ESTS:
     pl4._ax.set_ylim(-0.5,0.5)
     """
 
-    pl.done(f'ps_websky_halos_{est}.png')
-    pl2.done(f'ps_websky_halos_cross_vs_auto_diff_{est}.png')
+    pl.done(f'ps_websky_2_3_{est}.png')
+    pl2.done(f'ps_websky_2_3_cross_vs_auto_diff_{est}.png')
     #pl3.done(f'ps_recon_vs_inp_auto_diff_{est}.png')
     #pl4.done(f'ps_recon_vs_inp_cross_diff_{est}.png')
     #pl._ax.set_ylim(1e-9,1e-5)
