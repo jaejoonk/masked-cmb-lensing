@@ -33,7 +33,7 @@ PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 PATH_TO_FALAFEL = "/home/joshua/research/falafel"
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_beam_conv.fits"
+MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_websky_fake3.fits"
 HALOS_FILENAME = PATH_TO_SCRATCH + "halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
@@ -124,9 +124,9 @@ if args.verbose: DEBUG = args.verbose
 minstr, maxstr = int(MIN_MASS), int(MAX_MASS)
 if args.snr: minstr, maxstr = "SNR", "5"
 inpaintstr = "inpaint-" if args.asmap else ""
-OUTPUT_STACKS_FILENAME = f"data-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks-mpi.png"
-OUTPUT_RPROFILE_FILENAME = f"data-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err-mpi.png"
-OUTPUT_RRPROFILE_FILENAME = f"data-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff-mpi.png"
+OUTPUT_STACKS_FILENAME = f"websky-fake3-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-qe-stacks-mpi.png"
+OUTPUT_RPROFILE_FILENAME = f"websky-fake3-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-err-mpi.png"
+OUTPUT_RRPROFILE_FILENAME = f"websky-fake3-{inpaintstr}kappa-{minstr}to{maxstr}-{LMAX}-rbin-profiles-diff-mpi.png"
 
 ###############################################
 # Lensing reconstruction
@@ -141,7 +141,7 @@ def full_procedure(debug=DEBUG):
         else: alms = utils.change_alm_lmax(josh_wlrecon.almfile_to_alms(alm_filename=ALM_FILENAME),
                                         lmax=MLMAX)
             
-        kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, lmax=LMAX,
+        kap_map = josh_wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, mlmax=MLMAX,
                                             res=RESOLUTION)
         kap_map = kap_map - kap_map.mean()
         

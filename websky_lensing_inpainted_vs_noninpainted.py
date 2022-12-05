@@ -35,8 +35,8 @@ MASK_FILENAME = PATH_TO_SCRATCH + "act_mask_20220316_GAL060_rms_70.00_d2sk.fits"
 KAP_FILENAME = "websky/kap.fits"
 #KAP_FILENAME = PATH_TO_SCRATCH + "maps/kappa_alm_lmax6000.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-MAP_FILENAME = "inpainted_fake_map_6000.fits"
-MAP2_FILENAME = "uninpainted_fake_map_6000.fits"
+MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_data_fake3.fits"
+MAP2_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_data_fake3.fits"
 HALOS_FILENAME = PATH_TO_SCRATCH + "halos.pksc"
 COORDS_FILENAME = "output_halos.txt"
 NCOORDS = 10000
@@ -108,9 +108,9 @@ oneprint(f"Using alms from inpainted map {MAP_FILENAME}.")
 if args.verbose: DEBUG = args.verbose
 
 minstr, maxstr = "SNR", "5"
-OUTPUT_STACKS_FILENAME = f"stacks-inp-vs-noninp-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
-OUTPUT_RPROFILE_FILENAME = f"rbin-profiles-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
-OUTPUT_RRPROFILE_FILENAME = f"rbin-profiles-diff-fake-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_STACKS_FILENAME = f"data-fake3-stacks-inp-vs-noninp-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_RPROFILE_FILENAME = f"rbin-profiles-data-fake3-kappa-{minstr}to{maxstr}-{LMAX}.png"
+OUTPUT_RRPROFILE_FILENAME = f"rbin-profiles-diff-data-fake3-kappa-{minstr}to{maxstr}-{LMAX}.png"
 
 ###############################################
 # Lensing reconstruction
@@ -120,8 +120,8 @@ def full_procedure(debug=DEBUG):
     if COMM.Get_rank() == 0:
         t1 = time.time()
 
-        ialms = cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX)
-        ualms = cs.map2alm(enmap.read_map(MAP2_FILENAME), lmax=MLMAX)
+        ialms = cs.map2alm(enmap.read_map(MAP_FILENAME), lmax=MLMAX, tweak=True)
+        ualms = cs.map2alm(enmap.read_map(MAP2_FILENAME), lmax=MLMAX, tweak=True)
         kap_map = wlrecon.kapfile_to_map(kap_filename=KAP_FILENAME, mlmax=MLMAX,
                                          res=RESOLUTION)
         #s, w = enmap.fullsky_geometry(res=RESOLUTION)
