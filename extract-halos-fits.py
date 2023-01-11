@@ -6,10 +6,13 @@ import healpy as hp
 SNR = 5
 #FILENAME = "../nemo_allfgs_wnoise-wdr6dn_tsz-psmask-cori_optimalCatalog.fits"
 FILENAME = "sehgal_catalog.fits"
-OUTPUT_NAME = "coords-snr-2-mask"
+OUTPUT_NAME = "coords-snr-5"
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 IVAR_FILENAME = PATH_TO_SCRATCH + "maps/cmb_night_pa5_f150_8way_coadd_ivar.fits"
 MASK_FILENAME = PATH_TO_SCRATCH + "act_mask_20220316_GAL060_rms_70.00_d2sk.fits"
+OUTPUT_FSKY_FAKE = "coords-fsky"
+
+FULL_SKY_DEG2 = 4*np.pi*(180./np.pi)**2
 
 def gen_coords_snr(fname=FILENAME, output_name=OUTPUT_NAME, snr=SNR):
     output_name += f"-{snr}.txt"
@@ -27,15 +30,24 @@ def gen_coords_snr(fname=FILENAME, output_name=OUTPUT_NAME, snr=SNR):
     np.savetxt(output_name, coords)
     print(f"Saved {len(coords)} coords to {output_name}.")
 
+# r is in degrees!!!!
+def gen_coords_sky_fraction_fake(frac, r, dec_min=-60., dec_max=20.,
+                                 ivar_filename=None, downgrade=None,
+                                 output_name=OUTPUT_FSKY_FAKE):
+    Ncoords = np.ceil((frac * FULL_SKY_DEG2) / (r ** 2 * np.pi)).astype(int)
+
+    gen_coords_fake(Ncoords, dec_min=dec_min, dec_max=dec_max,
+                    ivar_filename=ivar_filename, downgrade=downgrade,
+                    output_name=output_name + f"-{frac:0.2f}")
 
 def gen_coords_fake(num, dec_min=-60., dec_max=20.,
                     ivar_filename=MASK_FILENAME, downgrade=2,
                     output_name=OUTPUT_NAME):
     dec_min *= np.pi / 180.
     dec_max *= np.pi / 180.
-    #if ivar_filename is None: ivar = None
+    if ivar_filename is None: ivar = None
     #else: ivar = enmap.downgrade(enmap.read_map(ivar_filename), downgrade, op=np.sum)
-    ivar = enmap.read_map(ivar_filename)
+    else: ivar = enmap.read_map(ivar_filename)
     c = random_coords_range(num, dec_min=dec_min, dec_max=dec_max, nonzero_map=ivar)
     output_name += f"-fake-{len(c)}.txt"
 
@@ -85,5 +97,5 @@ def random_coords_range(N, ra_min=None, ra_max=None,
     return np.array(coords[:N])
 
 if __name__ == '__main__':
-    gen_coords_fake(10259)
+    gen_coords_fake(5129)
 

@@ -22,6 +22,7 @@ rank = COMM.Get_rank()
 
 # let's convert our lensed alms to a map
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
+PATH_TO_HOME = "/global/homes/j/jaejoonk/"
 #ALM_FILENAME = "websky/lensed_alm.fits"
 
 # ALM_FILENAME = PATH_TO_SCRATCH + "maps/lensed_cmb_alm_websky_cmb1999_lmax6000.fits"
@@ -35,7 +36,7 @@ COORDS_FILENAME = "output_halos_10259.txt"
 COORDS_OUTPUT = "coords-10259.txt"
 COORDS = 10259
 
-SNR_COORDS_FILENAME = "coords-snr-2-mask-fake-10259.txt"
+SNR_COORDS_FILENAME = PATH_TO_HOME + "masked-cmb-lensing/coords-snr-5-fake-10259.txt"
 
 MIN_MASS = 1.0 # 1e14
 MAX_MASS = 100.0 # 1e14
@@ -51,8 +52,8 @@ MASK = enmap.read_map(MASK_FILENAME)
 OUTPUT_DIR = "/global/cscratch1/sd/jaejoonk/inpaint_geos/"
 BEAM_FWHM = 1.5 # arcmin
 BEAM_SIG = BEAM_FWHM / (8 * np.log(2))**0.5 
-LMAX = 3000
-MLMAX = 6000
+LMAX = 6000
+MLMAX = 7000
 THEORY_FN = cosmology.default_theory().lCl
 ## probably wrong, but gaussian centered at l = 0 and sigma derived from beam fwhm   
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
@@ -60,8 +61,8 @@ SNR = 5
 
 CONTEXT_FRACTION = 2./3.
 
-UNINPAINTED_MAP_NAME = f"uninpainted_map_websky_fake3.fits"
-INPAINTED_MAP_NAME = f"inpainted_map_websky_fake3.fits"
+UNINPAINTED_MAP_NAME = PATH_TO_SCRATCH + "maps/uninpainted_map_websky_random_6000.fits"
+INPAINTED_MAP_NAME = PATH_TO_SCRATCH + "maps/inpainted_map_websky_random_6000.fits"
 
 # random 8 letter name
 FOLDER_SIZE = 8 
@@ -92,7 +93,7 @@ def mass_gen_coords(min_mass=MIN_MASS, max_mass=MAX_MASS, ncoords=COORDS,
     return coords
     
 def save_geometries(coords, hole_rad=HOLE_RADIUS, ivar=IVAR, output_dir=OUTPUT_DIR,
-                    theory_fn=THEORY_FN, beam_fn=BEAM_FN, comm=COMM):
+                    theory_fn=THEORY_FN, beam_fn=BEAM_FN, cf=CONTEXT_FRACTION, comm=COMM):
     if rank == 0:
         print(f"Saving geometries now...")
         os.mkdir(output_dir + FOLDER_NAME)
@@ -102,7 +103,7 @@ def save_geometries(coords, hole_rad=HOLE_RADIUS, ivar=IVAR, output_dir=OUTPUT_D
     t1 = time.time()
     pixcov.inpaint_uncorrelated_save_geometries(coords, hole_rad, ivar, output_dir + FOLDER_NAME,
                                                 theory_fn=theory_fn, beam_fn=beam_fn,
-                                                pol=False, context_fraction=CONTEXT_FRACTION, comm=comm)
+                                                pol=False, context_fraction=cf, comm=comm)
 
     t2 = time.time() 
     if rank == 0: print(f"Done saving geometries after {t2-t1:0.5f} seconds!")
@@ -110,7 +111,9 @@ def save_geometries(coords, hole_rad=HOLE_RADIUS, ivar=IVAR, output_dir=OUTPUT_D
 def inpainting(output_dir=OUTPUT_DIR, map_filename=MAP_FILENAME,
                alm_filename=ALM_FILENAME, mask_filename=MASK_FILENAME,
                res=RESOLUTION, mlmax=MLMAX, beam_fwhm=BEAM_FWHM,
-               ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS):
+               ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS,
+               inpainted_name=INPAINTED_MAP_NAME,
+               uninpainted_name=UNINPAINTED_MAP_NAME):
     ## reconvolve beam?
     if rank == 0:
         print(f"Reading geometries from {output_dir}.")
@@ -133,7 +136,7 @@ def inpainting(output_dir=OUTPUT_DIR, map_filename=MAP_FILENAME,
                                        wcs=lensed_map.wcs,
                                        noise_muK_arcmin=NOISE_T)
         #io.hplot(lensed_map, PATH_TO_SCRATCH + "pre_inpainted_post_mask_noisy_data_map")
-        enmap.write_map(UNINPAINTED_MAP_NAME, lensed_map, fmt="fits")
+        enmap.write_map(uninpainted_name, lensed_map, fmt="fits")
 
         print("Saved uninpainted map to disk.")
     #io.hplot(lensed_map, "pre_inpainted_map_view.png")
@@ -152,22 +155,14 @@ def inpainting(output_dir=OUTPUT_DIR, map_filename=MAP_FILENAME,
     # don't need parallel processes anymore?
     if rank != 0: exit()
 
-    enmap.write_map(INPAINTED_MAP_NAME, inpainted_map, fmt="fits")
+    enmap.write_map(inpainted_name, inpainted_map, fmt="fits")
     print(f"Time for inpainting from geometries: {t2-t1:0.5f} seconds")
-
-    ## deconvolve beam
-    #INV_BEAM_FN = lambda ells: 1./maps.gauss_beam(ells, beam_fwhm)
-    #inpainted_alm = cs.almxfl(cs.map2alm(inpainted_map, lmax=lmax), INV_BEAM_FN)
-    #inpainted_map = cs.alm2map(inpainted_alm, enmap.empty(shape, wcs, dtype=np.float32)) 
-
-    # SAVE MAP + alms
-    #if snr: enmap.write_map(f"inpainted_map_ivar_SNR_{snr}.fits", inpainted_map, fmt="fits")
-    #else: enmap.write_map(f"inpainted_map_ivar_{MIN_MASS:.1f}_to_{MAX_MASS:.1f}.fits", inpainted_map, fmt="fits")
-    #print(f"Saved map.")
 
 def inpainting_from_alms(output_dir=OUTPUT_DIR, alm_filename=ALM_FILENAME,
                res=RESOLUTION, mlmax=MLMAX, beam_fwhm=BEAM_FWHM,
-               ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS):
+               ifsnr=True, snr=5, min_mass=MIN_MASS, max_mass=MAX_MASS,
+               uninpainted_name=UNINPAINTED_MAP_NAME,
+               inpainted_name=INPAINTED_MAP_NAME):
     ## reconvolve beam?
     if rank == 0:
         print(f"Reading geometries from {output_dir}.")
@@ -182,7 +177,7 @@ def inpainting_from_alms(output_dir=OUTPUT_DIR, alm_filename=ALM_FILENAME,
         lensed_map += maps.white_noise(shape=FULL_SHAPE,
                                        wcs=FULL_WCS,
                                        noise_muK_arcmin=NOISE_T)
-        enmap.write_map(UNINPAINTED_MAP_NAME, lensed_map, fmt="fits")
+        enmap.write_map(uninpainted_name, lensed_map, fmt="fits")
 
         print("Saved uninpainted map to disk.")
     else:
@@ -200,26 +195,32 @@ def inpainting_from_alms(output_dir=OUTPUT_DIR, alm_filename=ALM_FILENAME,
     # don't need parallel processes anymore?
     if rank != 0: exit()
 
-    enmap.write_map(INPAINTED_MAP_NAME, inpainted_map, fmt="fits")
+    enmap.write_map(inpainted_name, inpainted_map, fmt="fits")
     print(f"Time for inpainting from geometries: {t2-t1:0.5f} seconds")
 
-def do_all(saved=False, ifsnr = True, folder_name=None, from_alms=True):
+def do_all(saved=False, ifsnr=True, folder_name=None,
+           from_alms=True, uninpainted_name=UNINPAINTED_MAP_NAME,
+           inpainted_name=INPAINTED_MAP_NAME, cf=CONTEXT_FRACTION):
     if not ifsnr: c = mass_gen_coords()
     else:
         d = np.loadtxt(SNR_COORDS_FILENAME)
         c = np.column_stack((d[:,0], d[:,1]))
 
-    if not saved: save_geometries(c)
+    if not saved: save_geometries(c, cf=cf)
     COMM.Barrier()
     
     if from_alms: inpainting_from_alms(
                       output_dir=(OUTPUT_DIR + \
                           (FOLDER_NAME if folder_name is None else folder_name)
-                      ))
+                      ), uninpainted_name=uninpainted_name,
+                      inpainted_name=inpainted_name)
     else: inpainting(
               output_dir=(OUTPUT_DIR + \
                   (FOLDER_NAME if folder_name is None else folder_name)
-              ))
+              ), uninpainted_name=uninpainted_name, inpainted_name=inpainted_name)
 
 if __name__ == '__main__':
-    do_all(saved=True, folder_name="rcgctrya/", from_alms=True)
+    CF = 2./3.
+    UNINP = PATH_TO_SCRATCH + f"uninpainted_map_websky_random_fake_6000.fits"
+    INP = PATH_TO_SCRATCH + f"inpainted_map_websky_random_fake_6000.fits"
+    do_all(uninpainted_name=UNINP, inpainted_name=INP, cf=CF)

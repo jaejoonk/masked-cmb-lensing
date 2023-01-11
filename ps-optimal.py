@@ -14,7 +14,6 @@ import cmb_ps
 
 import time
 
-PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 ESTS = ['TT']
 RESOLUTION = np.deg2rad(0.5/60.)
 COMM = MPI.COMM_WORLD
@@ -24,8 +23,8 @@ t1 = time.time()
 
 # constants
 LMIN = 600
-LMAX = 3000
-MLMAX = 4000
+LMAX = 4000
+MLMAX = 6000
 
 BEAM_FWHM = 1.5
 NOISE_T = 10.
@@ -35,9 +34,9 @@ PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 #KAP_FILENAME = PATH_TO_SCRATCH + "sehgal/tSZ_skymap_healpix_nopell_Nside4096_y_tSZrescale0p75.fits"
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-FILTERED_MAP_FILENAME = "optimal-filtered-websky-map-6000.fits"
+FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_empty.fits"
 
-CLTT_OUTPUT_NAME = f"ps_cltt_optimal_websky_{ESTS[0]}_6000.png"
+CLTT_OUTPUT_NAME = f"ps_cltt_optimal_websky_empty.png"
 
 ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
 icls = hp.alm2cl(ikalm,ikalm)
@@ -47,45 +46,61 @@ ells = np.arange(len(icls))
 #bin_edges = np.geomspace(2,MLMAX,30)
 bin_edges = np.arange(2,LMAX,30)
 binner = stats.bin1D(bin_edges)
-bin = lambda x: binner.bin(ells,x)
+bin = lambda x: binner.bin(np.arange(LMAX+1),x)
 
-def convert_alm_to_map(alm):
-    return cs.alm2map(alm, enmap.empty(shape=full_shape, wcs=full_wcs))
+# convolve beam before cltt
+BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
 
 # from inpainted map
-filtered_alm = cs.map2alm(enmap.read_map(FILTERED_MAP_FILENAME), lmax=MLMAX)
-filtered_alm = cs.almxfl(filtered_alm, lambda ells: maps.gauss_beam(ells, BEAM_FWHM))
-unfiltered_alm = futils.change_alm_lmax(read_alm(ALM_FILENAME), lmax=MLMAX)
-unfiltered_alm = cs.almxfl(unfiltered_alm, lambda ells: maps.gauss_beam(ells, BEAM_FWHM))          
+filtered_map = enmap.read_map(FILTERED_MAP_FILENAME)
+filtered_alm = cs.map2alm(filtered_map, lmax=LMAX)
+
+unfiltered_alm = futils.change_alm_lmax(read_alm(ALM_FILENAME), lmax=LMAX)
+
+filtered_alm = cs.almxfl(filtered_alm, BEAM_FN)
+unfiltered_alm = cs.almxfl(unfiltered_alm, BEAM_FN)
+
+white_noise_map = maps.white_noise(shape=full_shape, wcs=full_wcs, noise_muK_arcmin=NOISE_T)
+unfiltered_alm = cs.map2alm(cs.alm2map(unfiltered_alm,
+                                       enmap.empty(full_shape, full_wcs, dtype=np.float32)) \
+                            + white_noise_map, lmax=LMAX)
+
+ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, grad=False, lmax=MLMAX)
+ucls['TT'] = ucls['TT'][:LMAX+1]
+tcls['TT'] = tcls['TT'][:LMAX+1]
+
+iso_alm = futils.isotropic_filter([unfiltered_alm, unfiltered_alm*0., unfiltered_alm*0.],
+                                  tcls, LMIN, LMAX)[0]
 
 # plot cltt
 pl_tt = io.Plotter('rCL',xyscale='linlin',figsize=(12,12))
-unfiltered_cls = hp.alm2cl(unfiltered_alm.astype(np.cdouble),
-                           unfiltered_alm.astype(np.cdouble),
-                           lmax=MLMAX)
+pl_tt2 = io.Plotter('rCL',xyscale='linlin',figsize=(12,12))
+unfiltered_cls = hp.alm2cl(iso_alm.astype(np.cdouble),
+                           iso_alm.astype(np.cdouble),
+                           lmax=LMAX)
 filtered_cls = hp.alm2cl(filtered_alm.astype(np.cdouble),
-                         filtered_alm.astype(np.cdouble),
-                         lmax=MLMAX)
+                         filtered_alm.astype(np.cdouble),   
+                         lmax=LMAX)
 
-pl_tt.add(*bin((filtered_cls - unfiltered_cls) / unfiltered_cls), marker='o', label="optimal filter vs non-inp.")
-#pl_tt.add(*bin((inpainted2_cls - lensed_cls) / lensed_cls), marker='o', label="inp. (ivar) vs non-inp.")
-#pl_tt.add(*bin((fake_inpainted_cls - lensed_cls) / lensed_cls), marker='o', label="null inp. vs non-inp.")
+pl_tt.add(*bin((filtered_cls - unfiltered_cls) / unfiltered_cls), marker='o', label="optimal filter vs isotropic filter")
 pl_tt._ax.set_ylabel(r'$(C_L^{T_{OF} T_{OF}} - C_L^{TT}) /  C_L^{TT}$', fontsize=20)
 pl_tt._ax.set_xlabel(r'$L$', fontsize=20)
 pl_tt._ax.legend(fontsize=30)
 pl_tt.hline(y=0)
 pl_tt.done(CLTT_OUTPUT_NAME)
 
-# try reconstructing?
-ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T,
-                                                        grad=True, lmax=LMAX)
+pl_tt2.add(*bin(filtered_cls), marker='o', label="optimal filtered Cltt")
+pl_tt2.add(*bin(unfiltered_cls), marker='o', label="isotropic filtered Cltt")
+pl_tt2._ax.set_xlabel(r'$L$', fontsize=20)
+pl_tt2._ax.set_ylabel(r'$C_L$', fontsize=20)
+pl_tt2._ax.legend(fontsize=30)
+pl_tt2.done(f"ps_raw_cltt_optimal_websky_empty_{ESTS[0]}.png")
 
+# try reconstructing?
 INV_BEAM_FN = lambda ells: 1./maps.gauss_beam(ells, BEAM_FWHM)
 # deconvolve beam before reconstruction
 f_alm = cs.almxfl(filtered_alm, INV_BEAM_FN)
-unf_alm = cs.almxfl(unfiltered_alm, INV_BEAM_FN)
-# isotropically filter the "unfiltered" alms
-unf_alm = futils.isotropic_filter([unf_alm, unf_alm*0., unf_alm*0.], tcls, LMIN, LMAX)
+iso_alm = cs.almxfl(iso_alm, INV_BEAM_FN)
 
 px = qe.pixelization(shape=full_shape, wcs=full_wcs)
 
@@ -95,7 +110,7 @@ frecon_alms = qe.qe_all(px, ucls, mlmax=MLMAX,
                         xfTalm=None, xfEalm=None, xfBalm=None)
 
 recon_alms = qe.qe_all(px, ucls, mlmax=MLMAX,
-                       fTalm=unf_alm[0], fEalm=unf_alm[1], fBalm=unf_alm[2],
+                       fTalm=iso_alm, fEalm=iso_alm*0., fBalm=iso_alm*0.,
                        estimators=ESTS,
                        xfTalm=None, xfEalm=None, xfBalm=None)
 
@@ -114,6 +129,7 @@ bin2 = lambda x: binner2.bin(ells,x)
 for est in ESTS:
     pl = io.Plotter('CL', figsize=(16,12))
     pl2 = io.Plotter('rCL',xyscale='loglin',figsize=(16,12))
+    pl3 = io.Plotter('rCL', xyscale='loglin',figsize=(16,12))
     
     # convolve reconstruction w/ normalization
     norm_recon_alms[est] = plensing.phi_to_kappa(hp.almxfl(recon_alms[est][0].astype(np.complex128), Al[est][0]))
@@ -132,16 +148,20 @@ for est in ESTS:
 
     pl2.add(*bin2((fxi_cls-icls)/icls),marker='o',label="optimal filter recon x input Clkk")
     pl2.add(*bin2((rxi_cls-icls)/icls),marker='o',label="isotropic filter recon x input Clkk")
+    pl3.add(*bin2((fxi_cls-rxi_cls)/(rxi_cls-icls)),marker='o',label="optimal filter vs isotropic filter")
     #pl2.add(*bin2((filtered_cls-unfiltered_cls)/unfiltered_cls), marker='o', label="OF ClTT vs IF ClTT")
     pl2._ax.set_xlabel(r'$L$', fontsize=20)
     pl2._ax.legend(fontsize=30)
-    #pl2._ax.set_ylabel(r'$(C_L^{\hat\kappa \kappa_{i}} - C_L^{\kappa_{i} \kappa_{i}}) /  C_L^{\kappa_{i} \kappa_{i}}$', fontsize=16)
+    
+    pl3._ax.set_ylabel(r'Relative difference of $C_L^{\hat{\kappa} \kappa} / C_L^{\kappa \kappa} - 1$', fontsize=16)
     #pl2._ax.legend()
     pl2.hline(y=0)
+    pl3.hline(y=0)
     pl2._ax.set_ylim(-0.25,0.25)
+    pl3._ax.set_ylim(-0.1,0.1)
 
-    pl.done(f'ps_websky_optimal_filtering_{est}_6000.png')
-    pl2.done(f'ps_websky_optimal_filtering_cross_vs_auto_diff_{est}_6000.png')
-
+    pl.done(f'ps_websky_optimal_filtering_websky_halos_{est}.png')
+    pl2.done(f'ps_websky_optimal_filtering_websky_halos_cross_vs_auto_diff_{est}.png')
+    pl3.done(f'ps_websky_optimal_filtering_websky_halos_relative_{est}.png')
 
 print("Time elapsed: %0.5f seconds" % (time.time() - t1))

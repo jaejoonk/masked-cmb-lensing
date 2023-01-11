@@ -26,8 +26,8 @@ NOISE_T = 10.
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 #KAP_FILENAME = PATH_TO_SCRATCH + "sehgal/tSZ_skymap_healpix_nopell_Nside4096_y_tSZrescale0p75.fits"
 KAP_FILENAME = "websky/kap.fits"
-INP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_data_fake3.fits"
-NOINP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_data_fake3.fits"
+INP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/inpainted_map_websky_fake3.fits"
+NOINP_MAP_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_websky_fake3.fits"
 
 ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
 icls = hp.alm2cl(ikalm,ikalm)
@@ -57,4 +57,4 @@ pl_tt._ax.set_ylabel(r'$(C_L^{T_{inp} T_{inp}} - C_L^{TT}) /  C_L^{TT}$', fontsi
 pl_tt._ax.set_xlabel(r'$L$', fontsize=20)
 pl_tt._ax.legend(fontsize=30)
 pl_tt.hline(y=0)
-pl_tt.done(f"ps_cltt_data_fake_{ESTS[0]}.png")
+pl_tt.done(f"ps_cltt_websky_fake_{ESTS[0]}.png")

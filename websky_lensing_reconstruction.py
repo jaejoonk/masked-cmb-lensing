@@ -291,6 +291,35 @@ def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords, title="lensed_vs_in
         plt.savefig(f"{title}_{i}.png")
         plt.clf()
 
+# plot inpainted vs lensed alm maps
+def optimal_vs_iso_map(opt_map, iso_map, coords, title="optimal_vs_isotropic",
+                          radius=10*RESOLUTION, res=RESOLUTION):
+    opt_thumbnails = thumbnails(opt_map, coords, r=radius, res=res)
+    iso_thumbnails = thumbnails(iso_map, coords, r=radius, res=res)
+
+    for i in range(len(coords)):
+        [dec, ra] = coords[i]
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,10), dpi=80)
+        circle = Circle(xy=(int(radius/res), int(radius/res)),
+                         radius=12, color='black', fill=False)
+        circle2 = Circle(xy=(int(radius/res), int(radius/res)),
+                         radius=12, color='black', fill=False)
+
+        im1 = axes[0].imshow(opt_thumbnails[i], cmap='jet')
+        axes[0].set_title(f"Optimal filtered CMB map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        axes[0].add_patch(circle)
+        im2 = axes[1].imshow(iso_thumbnails[i], cmap='jet')
+        axes[1].set_title(f"Isotropic filtered CMB map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        axes[1].add_patch(circle2)
+        
+        fig.subplots_adjust(right=0.85)
+        fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
+        fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
+        
+        plt.tight_layout()
+        plt.savefig(f"{title}_{i}.png")
+        plt.clf()
+
 # symlens normalization
 
 ###############################################
