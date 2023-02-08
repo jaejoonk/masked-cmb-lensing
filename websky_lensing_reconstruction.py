@@ -148,6 +148,7 @@ def falafel_qe(ucls, falm, xfalm = None, mlmax=MLMAX, ests=ESTS, res=RESOLUTION)
        alms = falm
        xalms = [None, None, None] if xfalm is None else xfalm 
     
+    
     # run the quadratic estimator using the theory ucls
     recon_alms = qe.qe_all(px, ucls, mlmax=mlmax,
                            fTalm=alms[0], fEalm=alms[1], fBalm=alms[2],
@@ -292,30 +293,40 @@ def lensed_vs_inpaint_map(inpainted_map, lensed_map, coords, title="lensed_vs_in
         plt.clf()
 
 # plot inpainted vs lensed alm maps
-def optimal_vs_iso_map(opt_map, iso_map, coords, title="optimal_vs_isotropic",
-                          radius=10*RESOLUTION, res=RESOLUTION):
-    opt_thumbnails = thumbnails(opt_map, coords, r=radius, res=res)
-    iso_thumbnails = thumbnails(iso_map, coords, r=radius, res=res)
+def optimal_vs_iso_map(map1, map2, coords, title="optimal_vs_isotropic",
+                       label_one=None, label_two=None, radius=10*RESOLUTION, res=RESOLUTION):
+    thumbnails_one = thumbnails(map1, coords, r=radius, res=res)
+    thumbnails_two = thumbnails(map2, coords, r=radius, res=res)
 
     for i in range(len(coords)):
         [dec, ra] = coords[i]
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,10), dpi=80)
+        fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(24,8), dpi=80)
         circle = Circle(xy=(int(radius/res), int(radius/res)),
                          radius=12, color='black', fill=False)
         circle2 = Circle(xy=(int(radius/res), int(radius/res)),
                          radius=12, color='black', fill=False)
 
-        im1 = axes[0].imshow(opt_thumbnails[i], cmap='jet')
-        axes[0].set_title(f"Optimal filtered CMB map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        im1 = axes[0].imshow(thumbnails_one[i], cmap='jet')
+        if label_one is None:
+            axes[0].set_title(f"Non-filtered CMB map (beam + noise) at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        else:
+            axes[0].set_title(label_one, fontsize=12)
         axes[0].add_patch(circle)
-        im2 = axes[1].imshow(iso_thumbnails[i], cmap='jet')
-        axes[1].set_title(f"Isotropic filtered CMB map at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        im2 = axes[1].imshow(thumbnails_two[i], cmap='jet')
+        if label_two is None:
+            axes[1].set_title(f"Optimal filtered CMB map (beam + noise) at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
+        else:
+            axes[1].set_title(label_two, fontsize=12)
         axes[1].add_patch(circle2)
+
+        im3 = axes[2].imshow(thumbnails_one[i] - thumbnails_two[i], cmap='jet')
+        axes[2].set_title(f"Non-filt. minus optfilt. CMB map (beam + noise) at (ra={ra:.3f}, dec={dec:.3f})", fontsize=12)
         
         fig.subplots_adjust(right=0.85)
         fig.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
         fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
-        
+        fig.colorbar(im3, ax=axes[2], fraction=0.046, pad=0.04)
+
         plt.tight_layout()
         plt.savefig(f"{title}_{i}.png")
         plt.clf()

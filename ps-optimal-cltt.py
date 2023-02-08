@@ -20,12 +20,14 @@ full_shape, full_wcs = enmap.fullsky_geometry(res=RESOLUTION)
 
 # constants
 LMIN = 600
-LMAX = 4000
-MLMAX = 6000
+LMAX = 6000
+MLMAX = 7000
 HOLE_RADIUS = np.deg2rad(6./60.)
 
 BEAM_FWHM = 1.5
 NOISE_T = 10.
+
+SEED = 42
 
 # let's convert our lensed alms to a map
 PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
@@ -34,13 +36,13 @@ ALM_FILENAME = "websky/lensed_alm.fits"
 KAP_FILENAME = "websky/kap.fits"
 
 #LESS_FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_random_0.5.fits"
-EMPTY_FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_empty.fits"
-FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_random.fits"
+EMPTY_FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_empty_1.0_6000.fits"
+FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_random_1.0_6000_nocmbalmzero.fits"
 INPAINTED_MAP_FILENAME = PATH_TO_SCRATCH + "inpainted_map_websky_random_fake.fits"
 SNR_COORDS_FILENAME = "coords-snr-5-fake-10259.txt"
 
-CLTT_OUTPUT_NAME = f"ps_cltt_optimal_comparison_{ESTS[0]}.png"
-CLTT_RAW_OUTPUT_NAME = f"ps_raw_cltt_optimal_comparison_{ESTS[0]}.png"
+CLTT_OUTPUT_NAME = f"ps_cltt_optimal_comparison_1.0_6000_nozerocmbalm_{ESTS[0]}.png"
+CLTT_RAW_OUTPUT_NAME = f"ps_raw_cltt_optimal_comparison_1.0_6000_nozerocmbalm_{ESTS[0]}.png"
 
 ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
 icls = hp.alm2cl(ikalm,ikalm)
@@ -55,7 +57,7 @@ def masked_coords(coords, size=HOLE_RADIUS):
 empty_map = enmap.empty(full_shape, full_wcs, dtype=np.float32)
 BEAM_FN = lambda ells: maps.gauss_beam(ells, BEAM_FWHM)
 INV_BEAM_FN = lambda ells: 1./maps.gauss_beam(ells, BEAM_FWHM)
-white_noise_map = maps.white_noise(shape=full_shape, wcs=full_wcs, noise_muK_arcmin=NOISE_T)
+white_noise_map = maps.white_noise(shape=full_shape, wcs=full_wcs, noise_muK_arcmin=NOISE_T, seed=SEED)
 # define websky theory cls
 ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, grad=False, lmax=MLMAX)
 ucls['TT'] = ucls['TT'][:LMAX+1]

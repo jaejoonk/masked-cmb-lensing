@@ -9,41 +9,47 @@ from falafel import utils as futils
 
 COORDS_FILENAME = "coords-snr-5-fake-10259.txt"
 ALM_FILENAME = "websky/lensed_alm.fits"
+OPTIMAL_FILENAME = "../sims/" + "optimal_filtered_6000_cmbalmzero.fits"
 
-PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
-OPTIMAL_MAP = PATH_TO_SCRATCH + "optimal_filtered_websky_random.fits"
-#INP2_FILENAME = PATH_TO_SCRATCH + "maps/uninpainted_map_data_fake2.fits"
-#INP_FILENAME = "fake_inpainted_map_SNR_5.fits"
+OUTPUT_NAME = "optimal_vs_unfiltered_cmbalmzero_6000"
 
 NUM_COORDS = 10
-RESOLUTION = np.deg2rad(0.5/60.) # 0.5 arcmin by default
-RADIUS = 40 * RESOLUTION
+RESOLUTION = np.deg2rad(1.0/60.) # 0.5 arcmin by default
+RADIUS = 30 * RESOLUTION
 
-LMAX = 4000
-MLMAX = 6000
+LMAX = 6000
+MLMAX = 7000
+
+FULL_SHAPE, FULL_WCS = enmap.fullsky_geometry(res=RESOLUTION)
+NOISE_T = 10.
+BEAM_FWHM = 1.5
+SEED = 42
+noise_map = maps.white_noise(shape=FULL_SHAPE, wcs=FULL_WCS, noise_muK_arcmin=NOISE_T, seed=SEED)
 
 # plot the thumbnails before and after inpainting
 coords = np.loadtxt(COORDS_FILENAME)
 sampled = coords[np.random.choice(len(coords), NUM_COORDS, replace=False)]
 
-optimal_map = enmap.read_map(OPTIMAL_MAP)
-optimal_map = cs.alm2map(cs.almxfl(cs.map2alm(optimal_map, lmax=LMAX),
-                                   lambda ells: maps.gauss_beam(ells, 1.5)),
-                         enmap.empty(*(enmap.fullsky_geometry(res=RESOLUTION))))
-iso_alm = cs.almxfl(hp.fitsfunc.read_alm(ALM_FILENAME), 
-                               lambda ells: maps.gauss_beam(ells, 1.5))
-# isotropically filter
-ucls, tcls = cmb_ps.get_theory_dicts_white_noise_websky(1.5, 10., grad=False, lmax=MLMAX)
-ucls['TT'] = ucls['TT'][:LMAX+1]
-tcls['TT'] = tcls['TT'][:LMAX+1]
-iso_alm = futils.isotropic_filter([iso_alm, iso_alm*0., iso_alm*0.], tcls, 1, LMAX)[0]
+# load 1 / (C_l + N_l/b^2) * d / b_l
+optimal_map = enmap.read_map(OPTIMAL_FILENAME)
+# multiply by beam to get d / (C_l + N_l/b^2) = (b_l^2 C_l + N_l) / tcls
+optimal_alms = cs.almxfl(cs.map2alm(optimal_map, lmax=LMAX),
+                                    lambda ells: maps.gauss_beam(ells, BEAM_FWHM))
+_, tcls = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, grad=True, lmax=LMAX)
 
-iso_map = cs.alm2map(iso_alm, enmap.empty(*(enmap.fullsky_geometry(res=RESOLUTION))))
-         
-josh_wlrecon.optimal_vs_iso_map(optimal_map, iso_map,
-                                sampled, title="websky-of-vs-iso",
+# multiply by tcls to get b_l^2 C_l + N_l
+optimal_map = cs.alm2map(cs.almxfl(optimal_alms, tcls['TT']),
+                         enmap.empty(shape=FULL_SHAPE, wcs=FULL_WCS))
+
+# load d = b_l a_lm
+unfiltered_alms = cs.almxfl(hp.read_alm(ALM_FILENAME), lambda ells: maps.gauss_beam(ells, BEAM_FWHM))
+# square and add noise to get b_l^2 C_l + N_l
+unfiltered_map = cs.alm2map(unfiltered_alms, enmap.empty(shape=FULL_SHAPE, wcs=FULL_WCS)) + noise_map
+
+# change to lmax
+unfiltered_map = cs.alm2map(cs.map2alm(unfiltered_map, lmax=LMAX), enmap.empty(shape=FULL_SHAPE, wcs=FULL_WCS))
+
+josh_wlrecon.optimal_vs_iso_map(unfiltered_map, optimal_map,
+                                sampled, title=OUTPUT_NAME,
                                 radius=RADIUS, res=RESOLUTION)
-
-# relative stacked profiles
-# do separately idk
 

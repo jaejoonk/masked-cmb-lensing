@@ -15,7 +15,7 @@ import cmb_ps
 import time
 
 ESTS = ['TT']
-RESOLUTION = np.deg2rad(0.5/60.)
+RESOLUTION = np.deg2rad(1.0/60.)
 COMM = MPI.COMM_WORLD
 rank = COMM.Get_rank() 
 full_shape, full_wcs = enmap.fullsky_geometry(res=RESOLUTION)
@@ -23,8 +23,8 @@ t1 = time.time()
 
 # constants
 LMIN = 600
-LMAX = 4000
-MLMAX = 6000
+LMAX = 6000
+MLMAX = 8000
 
 BEAM_FWHM = 1.5
 NOISE_T = 10.
@@ -34,9 +34,9 @@ PATH_TO_SCRATCH = "/global/cscratch1/sd/jaejoonk/"
 #KAP_FILENAME = PATH_TO_SCRATCH + "sehgal/tSZ_skymap_healpix_nopell_Nside4096_y_tSZrescale0p75.fits"
 KAP_FILENAME = "websky/kap.fits"
 ALM_FILENAME = "websky/lensed_alm.fits"
-FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_empty.fits"
+FILTERED_MAP_FILENAME = PATH_TO_SCRATCH + "optimal_filtered_websky_random_1.0_6000.fits"
 
-CLTT_OUTPUT_NAME = f"ps_cltt_optimal_websky_empty.png"
+CLTT_OUTPUT_NAME = f"ps_cltt_optimal_websky_random_1.0_6000.png"
 
 ikalm = futils.change_alm_lmax(hp.map2alm(hp.read_map(KAP_FILENAME)), MLMAX)
 icls = hp.alm2cl(ikalm,ikalm)
@@ -160,8 +160,8 @@ for est in ESTS:
     pl2._ax.set_ylim(-0.25,0.25)
     pl3._ax.set_ylim(-0.1,0.1)
 
-    pl.done(f'ps_websky_optimal_filtering_websky_halos_{est}.png')
-    pl2.done(f'ps_websky_optimal_filtering_websky_halos_cross_vs_auto_diff_{est}.png')
-    pl3.done(f'ps_websky_optimal_filtering_websky_halos_relative_{est}.png')
+    pl.done(f'ps_websky_optimal_filtering_random_1.0_6000_{est}.png')
+    pl2.done(f'ps_websky_optimal_filtering_random_1.0_6000_cross_vs_auto_diff_{est}.png')
+    pl3.done(f'ps_websky_optimal_filtering_random_1.0_6000_relative_{est}.png')
 
 print("Time elapsed: %0.5f seconds" % (time.time() - t1))
