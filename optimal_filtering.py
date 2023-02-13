@@ -14,7 +14,8 @@ import websky_lensing_reconstruction as wlrecon
 import time, string, os
 
 ESTS = ['TT']
-RESOLUTION = np.deg2rad(1.0/60.)
+RES_ARCMIN = 1.0
+RESOLUTION = np.deg2rad(RES_ARCMIN/60.)
 
 # let's convert our lensed alms to a map
 PATH_TO_SCRATCH = "/home3/jaejoonk/sims/"
@@ -29,8 +30,8 @@ SNR_COORDS_FILENAME = "coords-snr-5-fake-10259.txt"
 HOLE_RADIUS = np.deg2rad(6.0/60.)
 NOISE_T = 10. # muK arcmin
 
-LMAX = 10000
-MLMAX = 10500
+LMAX = 6000
+MLMAX = 7000
 
 SEED = 37
 
@@ -44,15 +45,17 @@ SNR = 5
 
 NITER = 100
 
-FILTERED_MAP_NAME = PATH_TO_SCRATCH + f"optimal_filtered_10000_cmbalmzero.fits"
+CMBALMZERO = False
+cmbalmzero_str = "" if CMBALMZERO else "no"
+FILTERED_MAP_NAME = PATH_TO_SCRATCH + f"optimal_filter_{RES_ARCMIN}_{LMAX}_{cmbalmzero_str}cmbalmzero.fits"
 
 # projects onto full sky geometry to agree with ivar map
 def masked_coords(coords, size=HOLE_RADIUS):
     return enmap.distance_from(FULL_SHAPE, FULL_WCS, coords.T, rmax=size) >= size
 
-
 def optimal_filter(coords, alm_filename=ALM_FILENAME,
-                   output_filename=FILTERED_MAP_NAME,
+                   output_filename="optimally_filtered_map.fits",
+                   cmb_alm_zero=False,
                    lmax=LMAX, beam_fwhm=BEAM_FWHM):
 
     start = time.time()
@@ -69,9 +72,10 @@ def optimal_filter(coords, alm_filename=ALM_FILENAME,
     # thanks Mat!
     IVAR[~mask_bool] = 0.
     # set cmb alms to zero at coordinates too
-    cmb_map = cs.alm2map(alms, enmap.empty(FULL_SHAPE, FULL_WCS, dtype=np.float32))
-    cmb_map[~mask_bool] = 0.
-    alms = cs.map2alm(cmb_map, lmax=lmax).astype(np.complex128)
+    if cmb_alm_zero:
+        cmb_map = cs.alm2map(alms, enmap.empty(FULL_SHAPE, FULL_WCS, dtype=np.float32))
+        cmb_map[~mask_bool] = 0.
+        alms = cs.map2alm(cmb_map, lmax=lmax).astype(np.complex128)
     
     # use this line if testing on websky sims
     theory_cls, _ = cmb_ps.get_theory_dicts_white_noise_websky(BEAM_FWHM, NOISE_T, grad=False, lmax=MLMAX)
@@ -97,7 +101,7 @@ def do_all(saved=False, folder_name=None, from_alms=True):
     d = np.loadtxt(SNR_COORDS_FILENAME)
     c = np.column_stack(([d[:,0], d[:,1]]))
     
-    optimal_filter(c)
+    optimal_filter(c, output_filename=FILTERED_MAP_NAME, cmb_alm_zero=CMBALMZERO)
 
 if __name__ == '__main__':
     do_all()
