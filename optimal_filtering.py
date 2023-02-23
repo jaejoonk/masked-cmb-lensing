@@ -28,6 +28,7 @@ ALM_FILENAME = "websky/lensed_alm.fits"
 SNR_COORDS_FILENAME = "coords-snr-5-fake-10259.txt"
 
 HOLE_RADIUS = np.deg2rad(6.0/60.)
+APODIZATION_RADIUS = np.deg2rad(2.0/60.)
 NOISE_T = 10. # muK arcmin
 
 LMAX = 6000
@@ -50,8 +51,12 @@ cmbalmzero_str = "" if CMBALMZERO else "no"
 FILTERED_MAP_NAME = PATH_TO_SCRATCH + f"optimal_filter_{RES_ARCMIN}_{LMAX}_{cmbalmzero_str}cmbalmzero.fits"
 
 # projects onto full sky geometry to agree with ivar map
-def masked_coords(coords, size=HOLE_RADIUS):
-    return enmap.distance_from(FULL_SHAPE, FULL_WCS, coords.T, rmax=size) >= size
+# apodize = apodization extent in radians (extending from hole radius already)
+def masked_coords(coords, apodize=None, size=HOLE_RADIUS):
+    mask = enmap.distance_from(FULL_SHAPE, FULL_WCS, coords.T, rmax=size) >= size
+    if apodize is not None:
+        return 0.5*(1-np.cos(mask.distance_transform(rmax=apodize) * np.pi / apodize))
+    else: return mask
 
 def optimal_filter(coords, alm_filename=ALM_FILENAME,
                    output_filename="optimally_filtered_map.fits",
@@ -69,12 +74,13 @@ def optimal_filter(coords, alm_filename=ALM_FILENAME,
                       lmax=lmax)
     # stamp out holes
     mask_bool = masked_coords(coords)
+    mask_apod = masked_coords(coords, apodize=APODIZATION_RADIUS)
     # thanks Mat!
     IVAR[~mask_bool] = 0.
     # set cmb alms to zero at coordinates too
     if cmb_alm_zero:
         cmb_map = cs.alm2map(alms, enmap.empty(FULL_SHAPE, FULL_WCS, dtype=np.float32))
-        cmb_map[~mask_bool] = 0.
+        cmb_map *= mask_apod
         alms = cs.map2alm(cmb_map, lmax=lmax).astype(np.complex128)
     
     # use this line if testing on websky sims
